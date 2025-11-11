@@ -555,12 +555,21 @@ class Experiment:
                 self.timing_screen.deactivate()
                 self.data_collector.complete_trial(completed_normally=True)
                 
-                if self.current_task.timing_estimation:
-                    self.instruction_screen.activate()
-                    print(f"Оценка времени завершена! Фактическое: {timing_results['actual_duration']}мс, Оцененное: {timing_results['estimated_duration']}мс")
-                else:
-                    self.state.instruction_delay_timer = pygame.time.get_ticks()
-                    self.state.waiting_for_instruction = True
+                # ВСЕГДА показываем инструкцию после оценки времени
+                self.instruction_screen.activate()
+                print(f"Оценка времени завершена! Фактическое: {timing_results['actual_duration']}мс, Оцененное: {timing_results['estimated_duration']}мс")
+                print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
+        
+        # Обработка задачи воспроизведения
+        elif self.reproduction_task.is_active:
+            if self.reproduction_task.handle_event(event):
+                reproduction_results = self.reproduction_task.get_results()
+                self.data_collector.record_reproduction_results(reproduction_results)
+                self.reproduction_task.deactivate()
+                self.data_collector.complete_trial(completed_normally=True)
+                self.instruction_screen.activate()
+                print(f"Воспроизведение завершено! Целевое: {reproduction_results['target_duration']}мс, Воспроизведенное: {reproduction_results['reproduced_duration']}мс")
+                print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
         
         # Обработка задачи воспроизведения
         elif self.reproduction_task.is_active:
@@ -641,21 +650,30 @@ class Experiment:
     def handle_regular_task(self, actual_duration, current_time):
         """Обработка регулярной задачи"""
         self.data_collector.record_space_press(stopped_by_user=False)
+        self.data_collector.record_trajectory_duration(actual_duration)  # Добавляем запись длительности
         self.state.instruction_delay_timer = current_time
         self.state.waiting_for_instruction = True
-        print("Точка достигла финиша! Задержка 900 мс перед показом инструкции...")
+        print(f"Траектория завершена! Фактическое время: {actual_duration}мс")
+        print("Задержка 900 мс перед показом инструкции...")
     
     def check_instruction_delay(self, current_time):
         """Проверка задержки перед показом инструкции"""
-        if (self.state.waiting_for_instruction and 
-            not self.instruction_screen.is_active and 
-            not self.timing_screen.is_active and
-            not self.reproduction_task.is_active and
-            current_time - self.state.instruction_delay_timer >= self.state.INSTRUCTION_DELAY and
-            not self.current_task.timing_estimation and
-            not self.current_task.reproduction_task):
-            self.instruction_screen.activate()
-            print("Показ инструкции...")
+        if self.state.waiting_for_instruction:
+            time_passed = current_time - self.state.instruction_delay_timer
+            time_left = self.state.INSTRUCTION_DELAY - time_passed
+            
+            if (not self.instruction_screen.is_active and 
+                not self.timing_screen.is_active and
+                not self.reproduction_task.is_active and
+                time_passed >= self.state.INSTRUCTION_DELAY):
+                
+                self.instruction_screen.activate()
+                self.state.waiting_for_instruction = False
+                print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
+            
+            # Отладочная информация (можно убрать после исправления)
+            elif time_left > 0 and time_left % 100 == 0:  # Выводим каждые 100 мс
+                print(f"До показа инструкции: {time_left}мс")
     
     def run(self):
         """Запуск основного цикла эксперимента"""
