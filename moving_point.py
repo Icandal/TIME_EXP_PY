@@ -193,7 +193,7 @@ class MovingPoint:
             self.finished_timer = pygame.time.get_ticks()
             self.stopped_by_user = True
             # Гарантируем, что точка видима после остановки
-            self.is_visible = True
+            # self.is_visible = True
     
     def should_switch_to_next(self) -> bool:
         """Проверяет, нужно ли переключаться на следующую траекторию"""
@@ -204,17 +204,24 @@ class MovingPoint:
     
     def draw(self, screen: pygame.Surface) -> None:
         """Рисует движущуюся точку (если она видима)"""
-        if self.trajectory.points and self.is_visible:
-            color = (255, 0, 0)  # Красная точка
-            radius = 8
+        if not self.trajectory.points:
+            return
             
-            # Если остановлена пользователем - другой цвет
-            if self.stopped_by_user:
-                color = (255, 165, 0)  # Оранжевый
+        # Не рисуем точку, если она не видима
+        if not self.is_visible:
+            return
             
-            pygame.draw.circle(screen, color, 
-                             (int(self.current_position[0]), int(self.current_position[1])), 
-                             radius)
+        color = (255, 0, 0)  # Красная точка по умолчанию
+        radius = 8
+        
+        # Если остановлена пользователем - другой цвет
+        if self.stopped_by_user:
+            color = (255, 165, 0)  # Оранжевый
+        
+        pygame.draw.circle(screen, color, 
+                        (int(self.current_position[0]), int(self.current_position[1])), 
+                        radius)
+        
     
     def _segment_length(self, point1: Tuple[float, float], point2: Tuple[float, float]) -> float:
         """Вычисляет длину сегмента"""

@@ -39,6 +39,11 @@ class KeyHandler:
     
     def handle_event(self, event):
         """Обработка события клавиши"""
+        # Скрытая комбинация Ctrl+M для переключения режима
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_m and pygame.key.get_mods() & pygame.KMOD_CTRL:
+            self.experiment.toggle_minimal_mode()
+            return True
+            
         handler = self.key_handlers.get(event.key)
         if handler:
             handler()
@@ -131,6 +136,9 @@ class ScreenManager:
         handler = self.screen_handlers.get(screen_type)
         if handler:
             handler()
+        
+        # Всегда рисуем индикатор поверх всего
+        self.experiment.draw_indicator()
     
     def draw_initial_instruction(self):
         """Отрисовка начальной инструкции"""
@@ -231,6 +239,15 @@ class Experiment:
             self.current_task.fixation_shape, self.config.fixation_size
         )
         self.fixation.set_color(self.config.fixation_color)
+        
+        # Настройки индикатора для фотодатчика
+        self.indicator_radius = 15
+        self.indicator_color_active = (0, 0, 0)  # Черный - активный экран
+        self.indicator_color_passive = (255, 255, 255)  # Белый - инструкция
+        self.indicator_position = (self.screen_width - 30, self.screen_height - 30)
+        
+        # Скрытый переключатель для минималистичного режима (True = только необходимое)
+        self.minimal_mode = True  # По умолчанию включен минималистичный режим
         
         # Инициализируем время
         self.start_time = pygame.time.get_ticks()
@@ -350,7 +367,8 @@ class Experiment:
             f"Окклюзия: {'ВКЛ' if self.current_task.occlusion_enabled else 'ВЫКЛ'}",
             f"Оценка времени: {'ДА' if self.current_task.timing_estimation else 'НЕТ'}",
             f"Воспроизведение времени: {'ДА' if self.current_task.reproduction_task else 'НЕТ'}",
-            f"Разрешение экрана: {self.screen_width}x{self.screen_height}"
+            f"Разрешение экрана: {self.screen_width}x{self.screen_height}",
+            f"Минималистичный режим: {'ВКЛ' if self.minimal_mode else 'ВЫКЛ'}"
         ]
         
         if self.current_trial["duration"] is not None:
@@ -449,7 +467,8 @@ class Experiment:
             f"Окклюзия: {'ВКЛ' if self.current_task.occlusion_enabled else 'ВЫКЛ'}",
             f"Оценка времени: {'ДА' if self.current_task.timing_estimation else 'НЕТ'}",
             f"Воспроизведение времени: {'ДА' if self.current_task.reproduction_task else 'НЕТ'}",
-            f"Разрешение экрана: {self.screen_width}x{self.screen_height}"
+            f"Разрешение экрана: {self.screen_width}x{self.screen_height}",
+            f"Минималистичный режим: {'ВКЛ' if self.minimal_mode else 'ВЫКЛ'}"
         ]
         
         if self.current_trial["duration"] is not None:
@@ -468,8 +487,25 @@ class Experiment:
         )
         print(f"Данные текущего блока сохранены в файл: {filename}")
     
+    def draw_indicator(self):
+        """Рисует индикаторную окружность в правом нижнем углу"""
+        # Белый на начальном экране и экране инструкции, черный на остальных
+        if (self.state.waiting_for_initial_start and self.initial_instruction_screen.is_active) or \
+           self.instruction_screen.is_active:
+            color = self.indicator_color_passive  # Белый - начальный экран и инструкция
+        else:
+            color = self.indicator_color_active   # Черный - все остальные экраны
+        
+        pygame.draw.circle(self.screen, color, self.indicator_position, self.indicator_radius)
+        # Добавляем обводку для лучшей видимости
+        pygame.draw.circle(self.screen, (0, 0, 0), self.indicator_position, self.indicator_radius, 1)
+    
     def draw_info_panel(self):
-        """Отрисовка информационной панели"""
+        """Отрисовка информационной панели (скрывается в минималистичном режиме)"""
+        # Не отображаем информацию в минималистичном режиме
+        if self.minimal_mode:
+            return
+            
         font = pygame.font.Font(None, 24)
         
         info_texts = [
@@ -502,6 +538,12 @@ class Experiment:
         # Разрешение экрана
         resolution_text = font.render(info_texts[5], True, (0, 0, 0))
         self.screen.blit(resolution_text, (self.screen_width - 200, self.screen_height - 20))
+    
+    def toggle_minimal_mode(self):
+        """Переключает минималистичный режим (только для разработки)"""
+        self.minimal_mode = not self.minimal_mode
+        mode = "МИНИМАЛИСТИЧНЫЙ" if self.minimal_mode else "ПОЛНЫЙ"
+        print(f"Режим переключен: {mode} - информация {'скрыта' if self.minimal_mode else 'отображается'}")
     
     def handle_special_screens(self, event):
         """Обработка специальных экранов"""

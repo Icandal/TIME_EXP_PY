@@ -73,11 +73,12 @@ class DataCollector:
         """Записывает время окончания движения"""
         self.current_trial_data["movement_end_time"] = pygame.time.get_ticks()  # Текущее время в мс
     
-    def record_space_press(self, stopped_by_user: bool = True) -> None:
+    def record_space_press(self, stopped_by_user: bool = True, was_visible: bool = True) -> None:
         """Записывает время нажатия пробела"""
         current_time = pygame.time.get_ticks()  # Текущее время в мс
         self.current_trial_data["space_press_time"] = current_time
         self.current_trial_data["stopped_by_user"] = stopped_by_user  # Булево значение
+        self.current_trial_data["was_visible_when_stopped"] = was_visible  # Новая запись
         
         # Вычисляем время реакции
         if self.current_trial_data["movement_start_time"]:
