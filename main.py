@@ -267,8 +267,10 @@ class Experiment:
     def load_current_trajectory(self):
         """Загрузка текущей траектории"""
         try:
+            # Используем реальную категорию траектории (может отличаться от запрошенной для типа R)
+            actual_category = self.current_trial.get("actual_trajectory_category", self.current_block.trajectories_category)
             self.trajectory_manager.load_trajectory(
-                self.current_block.trajectories_category, 
+                actual_category, 
                 self.current_trial["trajectory_index"]
             )
         except ValueError as e:
@@ -559,6 +561,7 @@ class Experiment:
                 self.instruction_screen.activate()
                 print(f"Оценка времени завершена! Фактическое: {timing_results['actual_duration']}мс, Оцененное: {timing_results['estimated_duration']}мс")
                 print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
+                return True
         
         # Обработка задачи воспроизведения
         elif self.reproduction_task.is_active:
@@ -570,17 +573,11 @@ class Experiment:
                 self.instruction_screen.activate()
                 print(f"Воспроизведение завершено! Целевое: {reproduction_results['target_duration']}мс, Воспроизведенное: {reproduction_results['reproduced_duration']}мс")
                 print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
+                return True
         
-        # Обработка задачи воспроизведения
-        elif self.reproduction_task.is_active:
-            if self.reproduction_task.handle_event(event):
-                reproduction_results = self.reproduction_task.get_results()
-                self.data_collector.record_reproduction_results(reproduction_results)
-                self.reproduction_task.deactivate()
-                self.data_collector.complete_trial(completed_normally=True)
-                self.instruction_screen.activate()
-                print(f"Воспроизведение завершено! Целевое: {reproduction_results['target_duration']}мс, Воспроизведенное: {reproduction_results['reproduced_duration']}мс")
+        return False
     
+
     def update_moving_point(self, dt):
         """Обновление движущейся точки"""
         if not self._can_update_point():
@@ -658,25 +655,20 @@ class Experiment:
     
     def check_instruction_delay(self, current_time):
         """Проверка задержки перед показом инструкции"""
-        if self.state.waiting_for_instruction:
-            time_passed = current_time - self.state.instruction_delay_timer
-            time_left = self.state.INSTRUCTION_DELAY - time_passed
+        if (self.state.waiting_for_instruction and 
+            not self.instruction_screen.is_active and 
+            not self.timing_screen.is_active and
+            not self.reproduction_task.is_active and
+            current_time - self.state.instruction_delay_timer >= self.state.INSTRUCTION_DELAY):
             
-            if (not self.instruction_screen.is_active and 
-                not self.timing_screen.is_active and
-                not self.reproduction_task.is_active and
-                time_passed >= self.state.INSTRUCTION_DELAY):
-                
-                self.instruction_screen.activate()
-                self.state.waiting_for_instruction = False
-                print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
-            
-            # Отладочная информация (можно убрать после исправления)
-            elif time_left > 0 and time_left % 100 == 0:  # Выводим каждые 100 мс
-                print(f"До показа инструкции: {time_left}мс")
+            self.instruction_screen.activate()
+            self.state.waiting_for_instruction = False  # Сбрасываем флаг ожидания
+            print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
     
     def run(self):
         """Запуск основного цикла эксперимента"""
+        print("=== Эксперимент запущен ===")
+        
         while self.state.running:
             dt = self.clock.tick(60)
             current_time = pygame.time.get_ticks()
@@ -686,10 +678,16 @@ class Experiment:
                 if event.type == pygame.QUIT:
                     self.state.running = False
                 elif event.type == pygame.KEYDOWN:
+                    # Отладочная информация
+                    if event.key == pygame.K_SPACE:
+                        print(f"Нажат ПРОБЕЛ. Состояние: timing_screen.is_active={self.timing_screen.is_active}, instruction_screen.is_active={self.instruction_screen.is_active}")
+                    
                     # Обработка специальных экранов
-                    self.handle_special_screens(event)
-                    # Обработка обычных клавиш
-                    self.key_handler.handle_event(event)
+                    if self.handle_special_screens(event):
+                        print("Специальный экран обработан")
+                    else:
+                        # Обработка обычных клавиш
+                        self.key_handler.handle_event(event)
             
             # Обновление задачи воспроизведения
             if self.reproduction_task.is_active:

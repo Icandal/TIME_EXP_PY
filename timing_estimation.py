@@ -32,6 +32,7 @@ class TimingEstimationScreen:
             if event.key == pygame.K_SPACE and not self.space_pressed:
                 self.space_pressed = True
                 self.press_time = pygame.time.get_ticks() - self.start_time
+                print(f"Пробел нажат в оценке времени! Время: {self.press_time}мс")
                 return True
         return False
         
