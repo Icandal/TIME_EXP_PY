@@ -30,9 +30,13 @@ class Trajectory:
         """Рассчитывает продолжительность движения по траектории в миллисекундах"""
         if speed <= 0:
             return 0.0
-        # Время = расстояние / скорость (переводим в миллисекунды)
-        return (self.total_length / speed) * 1000  # мс
-    
+        
+        # ПРАВИЛЬНЫЙ РАСЧЕТ: учитываем FPS
+        fps = 60  # стандартная частота кадров
+        # speed в px/кадр, поэтому реальная скорость = speed * fps px/секунду
+        time_seconds = self.total_length / (speed * fps)
+        return time_seconds * 1000  # мс
+        
     def draw(self, screen: pygame.Surface) -> None:
         """Рисует ломаную линию на экране"""
         if len(self.points) > 1:

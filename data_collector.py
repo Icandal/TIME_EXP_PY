@@ -58,7 +58,8 @@ class DataCollector:
             "actual_trajectory_duration": None,                   # Фактическое время прохождения траектории в мс (целое число или None)
             "timing_estimation": None,                            # Результаты оценки времени (словарь или None)
             "reproduction_results": None,                         # Результаты воспроизведения времени (словарь или None)
-            "occlusion_zone": None                                # Информация о зоне окклюзии (словарь или None)
+            "occlusion_zone": None,                               # Информация о зоне окклюзии (словарь или None)
+            "was_visible_when_stopped": True                      # Была ли точка видима при остановке (булево)
         }
     
     def record_movement_start(self) -> None:
@@ -71,30 +72,34 @@ class DataCollector:
     
     def record_movement_end(self) -> None:
         """Записывает время окончания движения"""
-        self.current_trial_data["movement_end_time"] = pygame.time.get_ticks()  # Текущее время в мс
+        if not self.current_trial_data["movement_end_time"]:
+            self.current_trial_data["movement_end_time"] = pygame.time.get_ticks()  # Текущее время в мс
     
     def record_space_press(self, stopped_by_user: bool = True, was_visible: bool = True) -> None:
         """Записывает время нажатия пробела"""
         current_time = pygame.time.get_ticks()  # Текущее время в мс
         self.current_trial_data["space_press_time"] = current_time
-        self.current_trial_data["stopped_by_user"] = stopped_by_user  # Булево значение
+        self.current_trial_data["stopped_by_user"] = stopped_by_user
         self.current_trial_data["was_visible_when_stopped"] = was_visible  # Новая запись
         
-        # Вычисляем время реакции
-        if self.current_trial_data["movement_start_time"]:
-            self.current_trial_data["actual_response_time_movement"] = (
-                current_time - self.current_trial_data["movement_start_time"]  # Разница во времени в мс
-            )
+        # ЗАПИСЫВАЕМ ВРЕМЯ ОКОНЧАНИЯ ДВИЖЕНИЯ ДАЖЕ ПРИ ОСТАНОВКЕ ПОЛЬЗОВАТЕЛЕМ
+        if not self.current_trial_data["movement_end_time"]:
+            self.current_trial_data["movement_end_time"] = current_time
         
+        # ВЫЧИСЛЯЕМ ФАКТИЧЕСКОЕ ВРЕМЯ ДВИЖЕНИЯ
+        if self.current_trial_data["movement_start_time"]:
+            movement_duration = current_time - self.current_trial_data["movement_start_time"]
+            self.current_trial_data["actual_trajectory_duration"] = movement_duration
+            
+            # ЗАПИСЫВАЕМ ВРЕМЯ РЕАКЦИИ
+            self.current_trial_data["actual_response_time_movement"] = movement_duration
+            self.current_trial_data["reaction_time"] = movement_duration
+        
+        # Вычисляем время реакции от стимула (если есть)
         if self.current_trial_data["stimulus_start_time"]:
             self.current_trial_data["actual_response_time_stimulus"] = (
                 current_time - self.current_trial_data["stimulus_start_time"]  # Разница во времени в мс
             )
-        
-        self.current_trial_data["reaction_time"] = (
-            current_time - self.current_trial_data["movement_start_time"]
-            if self.current_trial_data["movement_start_time"] else None  # Разница во времени в мс или None
-        )
     
     def record_reference_times(self, movement_to_target: float, stimulus_presentation: float, 
                               trajectory_completion: float) -> None:
@@ -130,6 +135,8 @@ class DataCollector:
     def complete_trial(self, completed_normally: bool = False) -> None:
         """Завершает запись попытки"""
         self.current_trial_data["completed_normally"] = completed_normally  # Булево значение
+        
+        # Убедимся, что время окончания движения записано
         if completed_normally and not self.current_trial_data["movement_end_time"]:
             self.current_trial_data["movement_end_time"] = pygame.time.get_ticks()  # Текущее время в мс
         
@@ -159,6 +166,12 @@ class DataCollector:
         
         if trial['actual_response_time_stimulus']:
             print(f"Время от стимула до ответа: {trial['actual_response_time_stimulus']}мс")
+        
+        if trial['actual_trajectory_duration']:
+            print(f"Фактическое время движения: {trial['actual_trajectory_duration']}мс")
+        
+        if trial['reference_response_time']:
+            print(f"Эталонное время: {trial['reference_response_time']}мс")
         
         # Добавляем информацию об оценке времени, если она есть
         if trial.get('timing_estimation'):

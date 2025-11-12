@@ -240,11 +240,20 @@ class Experiment:
         )
         self.fixation.set_color(self.config.fixation_color)
         
-        # Настройки индикатора для фотодатчика
-        self.indicator_radius = 15
-        self.indicator_color_active = (0, 0, 0)  # Черный - активный экран
-        self.indicator_color_passive = (255, 255, 255)  # Белый - инструкция
-        self.indicator_position = (self.screen_width - 30, self.screen_height - 30)
+        # Настройки фото-сенсора из конфига
+        self.photo_sensor_radius = self.config.photo_sensor_radius
+        self.photo_sensor_color_active = self.config.photo_sensor_color_active
+        self.photo_sensor_color_passive = self.config.photo_sensor_color_passive
+        
+        # Позиция фото-сенсора (рассчитывается на основе смещений от правого нижнего угла)
+        self.photo_sensor_position = (
+            self.screen_width + self.config.photo_sensor_offset_x,  # Правая граница + смещение по X
+            self.screen_height + self.config.photo_sensor_offset_y  # Нижняя граница + смещение по Y
+        )
+        
+        # Выводим информацию о положении фото-сенсора
+        print(f"Фото-сенсор: позиция ({self.photo_sensor_position[0]}, {self.photo_sensor_position[1]}), "
+            f"смещение ({self.config.photo_sensor_offset_x}, {self.config.photo_sensor_offset_y})")
         
         # Скрытый переключатель для минималистичного режима (True = только необходимое)
         self.minimal_mode = True  # По умолчанию включен минималистичный режим
@@ -257,6 +266,7 @@ class Experiment:
         self.start_new_trial()
         
         self.print_current_trial_info()
+
     
     def update_progress_info(self):
         """Обновление информации о прогрессе"""
@@ -331,7 +341,39 @@ class Experiment:
         
         self.timing_screen = TimingEstimationScreen(self.screen_width, self.screen_height)
         self.reproduction_task = ReproductionTask(self.screen_width, self.screen_height)
-    
+
+    def calculate_reference_times(self):
+        """Рассчитывает эталонные времена для анализа"""
+        if not self.moving_point or not self.trajectory_manager.current_trajectory:
+            return
+        
+        trajectory = self.trajectory_manager.current_trajectory
+        total_length = trajectory.total_length
+        speed = self.assigned_speed
+        
+        # ИСПОЛЬЗУЕМ ИСПРАВЛЕННЫЙ РАСЧЕТ
+        fps = 60
+        reference_response_time = (total_length / (speed * fps)) * 1000  # мс
+        
+        # Время предъявления стимула (если применимо)
+        stimulus_presentation_time = 0.0
+        
+        # Время завершения траектории
+        trajectory_completion_time = reference_response_time
+        
+        self.data_collector.record_reference_times(
+            reference_response_time,
+            stimulus_presentation_time, 
+            trajectory_completion_time
+        )
+        
+        # ДЛЯ ОТЛАДКИ - выводим информацию о расчете
+        print(f"Расчет эталонного времени:")
+        print(f"  Длина траектории: {total_length:.1f} px")
+        print(f"  Скорость: {speed} px/кадр")
+        print(f"  FPS: {fps}")
+        print(f"  Эталонное время: {reference_response_time:.0f} мс ({reference_response_time/1000:.1f} сек)")
+            
     def start_new_trial(self):
         """Начало новой попытки"""
         condition_type = f"occlusion_{self.current_task.occlusion_type}" if self.current_task.occlusion_enabled else "no_occlusion"
@@ -352,6 +394,9 @@ class Experiment:
             assigned_speed=self.current_trial["speed"],
             assigned_duration=self.current_trial["duration"]
         )
+        
+        # РАССЧИТЫВАЕМ ЭТАЛОННЫЕ ВРЕМЕНА
+        self.calculate_reference_times()
     
     def print_current_trial_info(self):
         """Вывод информации о текущей попытке"""
@@ -443,12 +488,20 @@ class Experiment:
         """Остановка движущейся точки пользователем"""
         self.moving_point.stop_by_user()
         self.space_press_time = pygame.time.get_ticks()
-        reaction_time = self.space_press_time - self.start_time
         
-        self.data_collector.record_space_press(stopped_by_user=True)
+        # ЗАПИСЫВАЕМ ДАННЫЕ С ВРЕМЕНЕМ ОСТАНОВКИ
+        was_visible = self.moving_point.is_visible
+        self.data_collector.record_space_press(stopped_by_user=True, was_visible=was_visible)
+        
+        # ЗАПИСЫВАЕМ ФАКТИЧЕСКОЕ ВРЕМЯ ДВИЖЕНИЯ
+        if self.state.movement_started and self.data_collector.current_trial_data["movement_start_time"]:
+            movement_duration = self.space_press_time - self.data_collector.current_trial_data["movement_start_time"]
+            self.data_collector.record_trajectory_duration(movement_duration)
+        
         self.state.instruction_delay_timer = pygame.time.get_ticks()
         self.state.waiting_for_instruction = True
         
+        reaction_time = self.space_press_time - self.start_time
         print(f"Пользователь остановил точку! Время реакции: {reaction_time}мс")
         print(f"Задержка 900 мс перед показом инструкции...")
     
@@ -490,18 +543,18 @@ class Experiment:
         print(f"Данные текущего блока сохранены в файл: {filename}")
     
     def draw_indicator(self):
-        """Рисует индикаторную окружность в правом нижнем углу"""
+        """Рисует индикаторную окружность для фото-сенсора"""
         # Белый на начальном экране и экране инструкции, черный на остальных
         if (self.state.waiting_for_initial_start and self.initial_instruction_screen.is_active) or \
-           self.instruction_screen.is_active:
-            color = self.indicator_color_passive  # Белый - начальный экран и инструкция
+        self.instruction_screen.is_active:
+            color = self.photo_sensor_color_passive  # Белый - начальный экран и инструкция
         else:
-            color = self.indicator_color_active   # Черный - все остальные экраны
+            color = self.photo_sensor_color_active   # Черный - все остальные экраны
         
-        pygame.draw.circle(self.screen, color, self.indicator_position, self.indicator_radius)
+        pygame.draw.circle(self.screen, color, self.photo_sensor_position, self.photo_sensor_radius)
         # Добавляем обводку для лучшей видимости
-        pygame.draw.circle(self.screen, (0, 0, 0), self.indicator_position, self.indicator_radius, 1)
-    
+        pygame.draw.circle(self.screen, (0, 0, 0), self.photo_sensor_position, self.photo_sensor_radius, 1)
+        
     def draw_info_panel(self):
         """Отрисовка информационной панели (скрывается в минималистичном режиме)"""
         # Не отображаем информацию в минималистичном режиме
@@ -576,7 +629,6 @@ class Experiment:
                 return True
         
         return False
-    
 
     def update_moving_point(self, dt):
         """Обновление движущейся точки"""
@@ -646,12 +698,14 @@ class Experiment:
     
     def handle_regular_task(self, actual_duration, current_time):
         """Обработка регулярной задачи"""
-        self.data_collector.record_space_press(stopped_by_user=False)
-        self.data_collector.record_trajectory_duration(actual_duration)  # Добавляем запись длительности
+        # ЗАПИСЫВАЕМ ВСЕ ВРЕМЕНА ПРИ АВТОМАТИЧЕСКОМ ЗАВЕРШЕНИИ
+        self.data_collector.record_space_press(stopped_by_user=False, was_visible=True)
+        self.data_collector.record_trajectory_duration(actual_duration)
+        self.data_collector.record_movement_end()  # Убедимся, что время окончания записано
+        
         self.state.instruction_delay_timer = current_time
         self.state.waiting_for_instruction = True
-        print(f"Траектория завершена! Фактическое время: {actual_duration}мс")
-        print("Задержка 900 мс перед показом инструкции...")
+        print("Точка достигла финиша! Задержка 900 мс перед показом инструкции...")
     
     def check_instruction_delay(self, current_time):
         """Проверка задержки перед показом инструкции"""

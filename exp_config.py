@@ -74,6 +74,13 @@ class ExperimentConfig:
         self.fixation_color: Tuple[int, int, int] = (0, 0, 0)
         self.participant_id = "test_01"
         
+        # Настройки фото-сенсора
+        self.photo_sensor_radius = 20  # Размер окружности
+        self.photo_sensor_offset_x = -80  # Смещение от правого края (отрицательное = внутрь экрана)
+        self.photo_sensor_offset_y = -80  # Смещение от нижнего края (отрицательное = внутрь экрана)
+        self.photo_sensor_color_active = (0, 0, 0)    # Черный - активный экран
+        self.photo_sensor_color_passive = (255, 255, 255)  # Белый - инструкция
+        
         # Доступные скорости движения точки (пикселей в кадр), нужен FLOAT!!!
         self.available_speeds = [2.0, 4.0]
         
@@ -121,6 +128,11 @@ class ExperimentConfig:
             "fixation_size": self.fixation_size,
             "fixation_color": self.fixation_color,
             "participant_id": self.participant_id,
+            "photo_sensor_radius": self.photo_sensor_radius,
+            "photo_sensor_offset_x": self.photo_sensor_offset_x,
+            "photo_sensor_offset_y": self.photo_sensor_offset_y,
+            "photo_sensor_color_active": self.photo_sensor_color_active,
+            "photo_sensor_color_passive": self.photo_sensor_color_passive,
             "available_speeds": self.available_speeds,
             "available_durations": self.available_durations,
             "tasks": [task.to_dict() for task in self.tasks],
@@ -139,6 +151,24 @@ class ExperimentConfig:
             self.fixation_color = (0, 0, 0)
             
         self.participant_id = config_dict.get("participant_id", "test_01")
+        
+        # Настройки фото-сенсора
+        self.photo_sensor_radius = config_dict.get("photo_sensor_radius", 20)
+        self.photo_sensor_offset_x = config_dict.get("photo_sensor_offset_x", -50)
+        self.photo_sensor_offset_y = config_dict.get("photo_sensor_offset_y", -50)
+        
+        active_color_data = config_dict.get("photo_sensor_color_active", (0, 0, 0))
+        if isinstance(active_color_data, (list, tuple)) and len(active_color_data) >= 3:
+            self.photo_sensor_color_active = (int(active_color_data[0]), int(active_color_data[1]), int(active_color_data[2]))
+        else:
+            self.photo_sensor_color_active = (0, 0, 0)
+            
+        passive_color_data = config_dict.get("photo_sensor_color_passive", (255, 255, 255))
+        if isinstance(passive_color_data, (list, tuple)) and len(passive_color_data) >= 3:
+            self.photo_sensor_color_passive = (int(passive_color_data[0]), int(passive_color_data[1]), int(passive_color_data[2]))
+        else:
+            self.photo_sensor_color_passive = (255, 255, 255)
+        
         self.available_speeds = config_dict.get("available_speeds", [2.0, 2.5, 3.0, 3.5, 4.0])
         self.available_durations = config_dict.get("available_durations", [1500, 2000, 2500, 3000, 3500])
         
