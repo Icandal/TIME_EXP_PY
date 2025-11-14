@@ -15,7 +15,7 @@ from block_manager import BlockManager
 class ExperimentState:
     """Класс для управления состоянием эксперимента"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.waiting_for_initial_start = True
         self.waiting_for_instruction = False
         self.movement_started = False
@@ -28,11 +28,11 @@ class ExperimentState:
 class KeyHandler:
     """Класс для обработки клавиш"""
 
-    def __init__(self, experiment):
+    def __init__(self, experiment) -> None:
         self.experiment = experiment
         self.setup_key_handlers()
 
-    def setup_key_handlers(self):
+    def setup_key_handlers(self) -> None:
         """Настройка обработчиков клавиш"""
         self.key_handlers = {
             pygame.K_ESCAPE: self.handle_escape,
@@ -41,7 +41,7 @@ class KeyHandler:
             pygame.K_s: self.handle_save,
         }
 
-    def handle_event(self, event):
+    def handle_event(self, event) -> bool:
         """Обработка события клавиши"""
         # Скрытая комбинация Ctrl+M для переключения режима
         if (
@@ -58,11 +58,11 @@ class KeyHandler:
             return True
         return False
 
-    def handle_escape(self):
+    def handle_escape(self) -> None:
         """Обработка выхода"""
         self.experiment.state.running = False
 
-    def handle_space(self):
+    def handle_space(self) -> None:
         """Обработка пробела"""
         exp = self.experiment
 
@@ -83,17 +83,17 @@ class KeyHandler:
         elif self._can_stop_point():
             exp.stop_moving_point()
 
-    def handle_help(self):
+    def handle_help(self) -> None:
         """Показать справку"""
         if self._can_show_help():
             self.experiment.show_help_info()
 
-    def handle_save(self):
+    def handle_save(self) -> None:
         """Сохранить данные"""
         if self._can_save():
             self.experiment.save_current_data()
 
-    def _can_stop_point(self):
+    def _can_stop_point(self):# -> Any | bool:
         """Проверка возможности остановки точки"""
         exp = self.experiment
         return (
@@ -109,7 +109,7 @@ class KeyHandler:
             and not exp.current_task.reproduction_task
         )
 
-    def _can_show_help(self):
+    def _can_show_help(self) -> bool:
         """Проверка возможности показа справки"""
         exp = self.experiment
         return (
@@ -119,7 +119,7 @@ class KeyHandler:
             and not exp.reproduction_task.is_active
         )
 
-    def _can_save(self):
+    def _can_save(self) -> bool:
         """Проверка возможности сохранения"""
         return self._can_show_help()
 
@@ -127,7 +127,7 @@ class KeyHandler:
 class ScreenManager:
     """Класс для управления экранами"""
 
-    def __init__(self, experiment):
+    def __init__(self, experiment) -> None:
         self.experiment = experiment
         self.screen_handlers = {
             "initial_instruction": self.draw_initial_instruction,

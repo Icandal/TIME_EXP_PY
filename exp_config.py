@@ -1,6 +1,6 @@
-from fixation import FixationShape
-from typing import Dict, Any, Tuple, List
 import random
+from typing import Dict, Any, Tuple, List
+from fixation import FixationShape
 
 
 class TaskConfig:
@@ -14,7 +14,7 @@ class TaskConfig:
         occlusion_type: str = "half",
         timing_estimation: bool = False,
         reproduction_task: bool = False,
-        reproduction_duration: int = 2000,
+        reproduction_duration = None,
     ):
         self.name = name
         self.fixation_shape = fixation_shape
@@ -52,8 +52,8 @@ class BlockConfig:
         self.trajectories_category = trajectories_category
 
     def generate_trial_sequence(
-        self, available_speeds: List[float], available_durations: List[int]
-    ) -> List[Dict[str, Any]]:
+    self, available_speeds: List[float], available_durations: List[int]
+) -> List[Dict[str, Any]]:
         """Генерирует случайную последовательность попыток для блока"""
         trials = []
 
@@ -65,9 +65,9 @@ class BlockConfig:
                     random.choice(available_speeds) if task_type in [0, 1, 2] else None
                 )
 
-                # Случайно выбираем длительность для задач с временем (2,3)
+                # ИСПРАВЛЕНО: длительность выбирается ТОЛЬКО для задачи 4 (воспроизведение времени)
                 duration = (
-                    random.choice(available_durations) if task_type in [2, 3] else None
+                    random.choice(available_durations) if task_type == 3 else None
                 )
 
                 trials.append(
@@ -133,7 +133,7 @@ class ExperimentConfig:
                 "half",
                 False,
                 True,
-                2000,
+                reproduction_duration=None,
             ),
         ]
 
@@ -150,9 +150,9 @@ class ExperimentConfig:
             BlockConfig(
                 "Блок 7: Короткие траектории 2", {0: 5, 1: 5, 2: 5, 3: 5}, "S2"
             ),
-            BlockConfig(
-                "Блок 8: Случайные траектории", {0: 5, 1: 5, 2: 5, 3: 5}, "R"
-            ),  # R - случайные из всех категорий
+            # BlockConfig(
+            #     "Блок 8: Случайные траектории", {0: 5, 1: 5, 2: 5, 3: 5}, "R"
+            # ),  # R - случайные из всех категорий
         ]
 
     def get_current_task_config(self, task_index: int) -> TaskConfig:
@@ -171,6 +171,44 @@ class ExperimentConfig:
     def get_total_blocks(self) -> int:
         """Возвращает общее количество блоков"""
         return len(self.blocks)
+
+    def validate(self) -> List[str]:
+        """Проверяет корректность конфигурации и возвращает список ошибок"""
+        errors = []
+        
+        if not self.participant_id or not isinstance(self.participant_id, str):
+            errors.append("participant_id должен быть непустой строкой")
+        
+        if not self.available_speeds or any(speed <= 0 for speed in self.available_speeds):
+            errors.append("available_speeds должен содержать положительные значения")
+        
+        if not self.available_durations or any(dur <= 0 for dur in self.available_durations):
+            errors.append("available_durations должен содержать положительные значения")
+        
+        # Проверяем соответствие ожидаемым значениям
+        expected_speeds = [2.0, 4.0]
+        expected_durations = [500, 1600, 2900]
+        
+        if self.available_speeds != expected_speeds:
+            errors.append(f"available_speeds должен быть {expected_speeds}, получено {self.available_speeds}")
+        
+        if self.available_durations != expected_durations:
+            errors.append(f"available_durations должен быть {expected_durations}, получено {self.available_durations}")
+        
+        if not self.tasks:
+            errors.append("Список tasks не может быть пустым")
+        
+        if not self.blocks:
+            errors.append("Список blocks не может быть пустым")
+        
+        # Проверка распределения задач в блоках
+        for i, block in enumerate(self.blocks):
+            if not block.tasks_distribution:
+                errors.append(f"Блок {i+1} ({block.name}): tasks_distribution не может быть пустым")
+            if not block.trajectories_category:
+                errors.append(f"Блок {i+1} ({block.name}): trajectories_category не может быть пустой")
+        
+        return errors
 
     def to_dict(self) -> Dict[str, Any]:
         """Возвращает настройки в виде словаря"""
@@ -214,8 +252,8 @@ class ExperimentConfig:
 
         # Настройки фото-сенсора
         self.photo_sensor_radius = config_dict.get("photo_sensor_radius", 20)
-        self.photo_sensor_offset_x = config_dict.get("photo_sensor_offset_x", -50)
-        self.photo_sensor_offset_y = config_dict.get("photo_sensor_offset_y", -50)
+        self.photo_sensor_offset_x = config_dict.get("photo_sensor_offset_x", -80)
+        self.photo_sensor_offset_y = config_dict.get("photo_sensor_offset_y", -80)
 
         active_color_data = config_dict.get("photo_sensor_color_active", (0, 0, 0))
         if isinstance(active_color_data, (list, tuple)) and len(active_color_data) >= 3:
@@ -242,12 +280,9 @@ class ExperimentConfig:
         else:
             self.photo_sensor_color_passive = (255, 255, 255)
 
-        self.available_speeds = config_dict.get(
-            "available_speeds", [2.0, 2.5, 3.0, 3.5, 4.0]
-        )
-        self.available_durations = config_dict.get(
-            "available_durations", [1500, 2000, 2500, 3000, 3500]
-        )
+        # Значения по умолчанию соответствуют основным настройкам
+        self.available_speeds = config_dict.get("available_speeds", [2.0, 4.0])
+        self.available_durations = config_dict.get("available_durations", [500, 1600, 2900])
 
         # Загружаем задачи
         self.tasks = []
@@ -262,7 +297,7 @@ class ExperimentConfig:
                 occlusion_type=task_data.get("occlusion_type", "half"),
                 timing_estimation=task_data.get("timing_estimation", False),
                 reproduction_task=task_data.get("reproduction_task", False),
-                reproduction_duration=task_data.get("reproduction_duration", 2000),
+                reproduction_duration=task_data.get("reproduction_duration", None),
             )
             self.tasks.append(task)
 

@@ -56,14 +56,14 @@ class DataCollector:
             "space_press_time": None,  # Время нажатия пробела в мс (целое число или None)
             "reaction_time": None,  # Общее время реакции в мс (целое число или None)
             # Флаги состояния
-            "stopped_by_user": False,  # Остановлена ли точка пользователем (булево)
-            "completed_normally": False,  # Завершена ли попытка нормально (булево)
+            "stopped_by_user": False,  # Остановлена ли точка пользователем (булевое)
+            "completed_normally": False,  # Завершена ли попытка нормально (булевое)
             # Дополнительные данные
             "actual_trajectory_duration": None,  # Фактическое время прохождения траектории в мс (целое число или None)
             "timing_estimation": None,  # Результаты оценки времени (словарь или None)
             "reproduction_results": None,  # Результаты воспроизведения времени (словарь или None)
             "occlusion_zone": None,  # Информация о зоне окклюзии (словарь или None)
-            "was_visible_when_stopped": True,  # Была ли точка видима при остановке (булево)
+            "was_visible_when_stopped": True,  # Была ли точка видима при остановке (булевое)
         }
 
     def record_movement_start(self) -> None:

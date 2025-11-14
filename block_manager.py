@@ -10,11 +10,11 @@ class BlockManager:
         blocks: List[BlockConfig],
         available_speeds: List[float],
         available_durations: List[int],
-    ):
-        self.trajectories_data = trajectories_data
-        self.blocks = blocks
-        self.available_speeds = available_speeds
-        self.available_durations = available_durations
+    ) -> None:
+        self.trajectories_data: Dict[str, Any] = trajectories_data
+        self.blocks: List[BlockConfig] = blocks
+        self.available_speeds: List[float] = available_speeds
+        self.available_durations: List[int] = available_durations
         self.current_block_index = 0
         self.current_trial_index = 0
 
@@ -32,7 +32,7 @@ class BlockManager:
 
             # Для каждой попытки выбираем случайную траекторию
             for trial in trial_sequence:
-                category = block.trajectories_category
+                category: str = block.trajectories_category
                 trajectory_idx, actual_category = self._get_next_available_trajectory(
                     category
                 )
@@ -49,9 +49,9 @@ class BlockManager:
 
     def _get_random_category(self) -> str:
         """Возвращает случайную категорию из доступных"""
-        available_categories = self._get_available_categories()
+        available_categories: List[str] = self._get_available_categories()
         if available_categories:
-            return random.choice(available_categories)
+            return random.choice(seq=available_categories)
         return "T"  # Резервный вариант
 
     def _get_next_available_trajectory(
