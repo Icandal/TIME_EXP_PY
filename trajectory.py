@@ -34,10 +34,11 @@ class Trajectory:
         if speed <= 0:
             return 0.0
 
-        # ПРАВИЛЬНЫЙ РАСЧЕТ: учитываем FPS
-        fps = 60  # стандартная частота кадров
-        # speed в px/кадр, поэтому реальная скорость = speed * fps px/секунду
-        time_seconds = self.total_length / (speed * fps)
+        # ИСПРАВЛЕНИЕ: speed уже в px/кадр, поэтому расчет проще
+        # Количество кадров = длина / скорость
+        frames_count = self.total_length / speed
+        # Время в секундах = количество кадров / FPS
+        time_seconds = frames_count / 60.0
         return time_seconds * 1000  # мс
 
     def draw(self, screen: pygame.Surface) -> None:

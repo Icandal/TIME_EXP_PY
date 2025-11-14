@@ -10,14 +10,16 @@ class TaskConfig:
         self,
         name: str,
         fixation_shape: FixationShape,
+        has_trajectory: bool = True,  # НОВОЕ: имеет ли задача траекторию
         occlusion_enabled: bool = True,
         occlusion_type: str = "half",
         timing_estimation: bool = False,
         reproduction_task: bool = False,
-        reproduction_duration = None,
+        reproduction_duration=None,
     ):
         self.name = name
         self.fixation_shape = fixation_shape
+        self.has_trajectory = has_trajectory  # НОВОЕ: определяет, есть ли траектория
         self.occlusion_enabled = occlusion_enabled
         self.occlusion_type = occlusion_type
         self.timing_estimation = timing_estimation
@@ -29,6 +31,7 @@ class TaskConfig:
         return {
             "name": self.name,
             "fixation_shape": self.fixation_shape.value,
+            "has_trajectory": self.has_trajectory,  # НОВОЕ
             "occlusion_enabled": self.occlusion_enabled,
             "occlusion_type": self.occlusion_type,
             "timing_estimation": self.timing_estimation,
@@ -52,8 +55,8 @@ class BlockConfig:
         self.trajectories_category = trajectories_category
 
     def generate_trial_sequence(
-    self, available_speeds: List[float], available_durations: List[int]
-) -> List[Dict[str, Any]]:
+        self, available_speeds: List[float], available_durations: List[int]
+    ) -> List[Dict[str, Any]]:
         """Генерирует случайную последовательность попыток для блока"""
         trials = []
 
@@ -65,7 +68,7 @@ class BlockConfig:
                     random.choice(available_speeds) if task_type in [0, 1, 2] else None
                 )
 
-                # ИСПРАВЛЕНО: длительность выбирается ТОЛЬКО для задачи 4 (воспроизведение времени)
+                # Длительность выбирается ТОЛЬКО для задачи воспроизведения (3)
                 duration = (
                     random.choice(available_durations) if task_type == 3 else None
                 )
@@ -97,17 +100,14 @@ class ExperimentConfig:
         self.participant_id = "test_01"
 
         # Настройки фото-сенсора
-        self.photo_sensor_radius = 20  # Размер окружности
-        self.photo_sensor_offset_x = (
-            -80
-        )  # Смещение от правого края (отрицательное = внутрь экрана)
-        self.photo_sensor_offset_y = (
-            -80
-        )  # Смещение от нижнего края (отрицательное = внутрь экрана)
+        self.photo_sensor_radius = 20
+        self.photo_sensor_offset_x = -80
+        self.photo_sensor_offset_y = -80
         self.photo_sensor_color_active = (0, 0, 0)  # Черный - активный экран
         self.photo_sensor_color_passive = (255, 255, 255)  # Белый - инструкция
+        self.photo_sensor_color_occlusion = (255, 0, 0)  # НОВОЕ: Красный - окклюзия
 
-        # Доступные скорости движения точки (пикселей в кадр), нужен FLOAT!!!
+        # Доступные скорости движения точки (пикселей в кадр)
         self.available_speeds = [2.0, 4.0]
 
         # Доступные длительности для задач с временем (миллисекунды)
@@ -116,28 +116,40 @@ class ExperimentConfig:
         # Определяем задачи
         self.tasks: List[TaskConfig] = [
             TaskConfig(
-                "Задача 1: Окклюзия (половина)", FixationShape.TRIANGLE, True, "half"
+                "Задача 1: Окклюзия (половина)",
+                FixationShape.TRIANGLE,
+                has_trajectory=True,  # Есть траектория
+                occlusion_enabled=True,
+                occlusion_type="half",
             ),
-            TaskConfig("Задача 2: Без окклюзии", FixationShape.RHOMBUS, False, "half"),
+            TaskConfig(
+                "Задача 2: Без окклюзии",
+                FixationShape.RHOMBUS,
+                has_trajectory=True,  # Есть траектория
+                occlusion_enabled=False,
+                occlusion_type="half",
+            ),
             TaskConfig(
                 "Задача 3: Оценка времени (без окклюзии)",
                 FixationShape.STAR,
-                False,
-                "half",
-                True,
+                has_trajectory=True,  # Есть траектория
+                occlusion_enabled=False,
+                occlusion_type="half",
+                timing_estimation=True,
             ),
             TaskConfig(
                 "Задача 4: Воспроизведение времени",
                 FixationShape.CROSS,
-                False,
-                "half",
-                False,
-                True,
+                has_trajectory=False,  # НЕТ траектории - ключевое изменение!
+                occlusion_enabled=False,
+                occlusion_type="half",
+                timing_estimation=False,
+                reproduction_task=True,
                 reproduction_duration=None,
             ),
         ]
 
-        # Определяем блоки (8 блоков с разными настройками)
+        # Определяем блоки
         self.blocks: List[BlockConfig] = [
             BlockConfig("Блок 1: Простые траектории", {0: 5, 1: 5, 2: 5, 3: 5}, "R"),
             BlockConfig("Блок 2: Сложные траектории 1", {0: 5, 1: 5, 2: 5, 3: 5}, "H1"),
@@ -150,9 +162,6 @@ class ExperimentConfig:
             BlockConfig(
                 "Блок 7: Короткие траектории 2", {0: 5, 1: 5, 2: 5, 3: 5}, "S2"
             ),
-            # BlockConfig(
-            #     "Блок 8: Случайные траектории", {0: 5, 1: 5, 2: 5, 3: 5}, "R"
-            # ),  # R - случайные из всех категорий
         ]
 
     def get_current_task_config(self, task_index: int) -> TaskConfig:
@@ -161,7 +170,7 @@ class ExperimentConfig:
             return self.tasks[task_index]
         else:
             return TaskConfig(
-                "Задача по умолчанию", FixationShape.TRIANGLE, True, "half"
+                "Задача по умолчанию", FixationShape.TRIANGLE, True, True, "half"
             )
 
     def get_total_tasks(self) -> int:
@@ -175,39 +184,51 @@ class ExperimentConfig:
     def validate(self) -> List[str]:
         """Проверяет корректность конфигурации и возвращает список ошибок"""
         errors = []
-        
+
         if not self.participant_id or not isinstance(self.participant_id, str):
             errors.append("participant_id должен быть непустой строкой")
-        
-        if not self.available_speeds or any(speed <= 0 for speed in self.available_speeds):
+
+        if not self.available_speeds or any(
+            speed <= 0 for speed in self.available_speeds
+        ):
             errors.append("available_speeds должен содержать положительные значения")
-        
-        if not self.available_durations or any(dur <= 0 for dur in self.available_durations):
+
+        if not self.available_durations or any(
+            dur <= 0 for dur in self.available_durations
+        ):
             errors.append("available_durations должен содержать положительные значения")
-        
+
         # Проверяем соответствие ожидаемым значениям
         expected_speeds = [2.0, 4.0]
         expected_durations = [500, 1600, 2900]
-        
+
         if self.available_speeds != expected_speeds:
-            errors.append(f"available_speeds должен быть {expected_speeds}, получено {self.available_speeds}")
-        
+            errors.append(
+                f"available_speeds должен быть {expected_speeds}, получено {self.available_speeds}"
+            )
+
         if self.available_durations != expected_durations:
-            errors.append(f"available_durations должен быть {expected_durations}, получено {self.available_durations}")
-        
+            errors.append(
+                f"available_durations должен быть {expected_durations}, получено {self.available_durations}"
+            )
+
         if not self.tasks:
             errors.append("Список tasks не может быть пустым")
-        
+
         if not self.blocks:
             errors.append("Список blocks не может быть пустым")
-        
+
         # Проверка распределения задач в блоках
         for i, block in enumerate(self.blocks):
             if not block.tasks_distribution:
-                errors.append(f"Блок {i+1} ({block.name}): tasks_distribution не может быть пустым")
+                errors.append(
+                    f"Блок {i+1} ({block.name}): tasks_distribution не может быть пустым"
+                )
             if not block.trajectories_category:
-                errors.append(f"Блок {i+1} ({block.name}): trajectories_category не может быть пустой")
-        
+                errors.append(
+                    f"Блок {i+1} ({block.name}): trajectories_category не может быть пустой"
+                )
+
         return errors
 
     def to_dict(self) -> Dict[str, Any]:
@@ -280,6 +301,17 @@ class ExperimentConfig:
         else:
             self.photo_sensor_color_passive = (255, 255, 255)
 
+        # Загружаем цвет окклюзии
+        occlusion_color_data = config_dict.get("photo_sensor_color_occlusion", (255, 0, 0))
+        if isinstance(occlusion_color_data, (list, tuple)) and len(occlusion_color_data) >= 3:
+            self.photo_sensor_color_occlusion = (
+                int(occlusion_color_data[0]),
+                int(occlusion_color_data[1]),
+                int(occlusion_color_data[2]),
+            )
+        else:
+            self.photo_sensor_color_occlusion = (255, 0, 0)
+
         # Значения по умолчанию соответствуют основным настройкам
         self.available_speeds = config_dict.get("available_speeds", [2.0, 4.0])
         self.available_durations = config_dict.get("available_durations", [500, 1600, 2900])
@@ -293,6 +325,7 @@ class ExperimentConfig:
                 fixation_shape=FixationShape(
                     task_data.get("fixation_shape", "triangle")
                 ),
+                has_trajectory=task_data.get("has_trajectory", True),  # НОВОЕ поле
                 occlusion_enabled=task_data.get("occlusion_enabled", True),
                 occlusion_type=task_data.get("occlusion_type", "half"),
                 timing_estimation=task_data.get("timing_estimation", False),

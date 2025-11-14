@@ -119,8 +119,12 @@ class MovingPoint:
         start_point = points[self.current_segment]
         end_point = points[self.current_segment + 1]
 
-        # Вычисляем новую позицию
-        self.progress += self.speed / self._segment_length(start_point, end_point)
+        # Вычисляем новую позицию (speed в px/кадр)
+        segment_length = self._segment_length(start_point, end_point)
+        if segment_length > 0:
+            self.progress += self.speed / segment_length
+        else:
+            self.progress = 1.0  # Нулевая длина сегмента
 
         if self.progress >= 1.0:
             # Переходим к следующему сегменту
@@ -207,7 +211,7 @@ class MovingPoint:
             # Гарантируем, что точка видима после остановки
             # self.is_visible = True
 
-    def should_switch_to_next(self) -> bool:
+    def should_switch_to_next(self):
         """Проверяет, нужно ли переключаться на следующую траекторию"""
         if self.is_finished:
             current_time = pygame.time.get_ticks()
