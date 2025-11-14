@@ -93,7 +93,7 @@ class KeyHandler:
         if self._can_save():
             self.experiment.save_current_data()
 
-    def _can_stop_point(self):# -> Any | bool:
+    def _can_stop_point(self) -> bool:
         """Проверка возможности остановки точки"""
         exp = self.experiment
         return (
