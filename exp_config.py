@@ -108,7 +108,7 @@ class ExperimentConfig:
         self.photo_sensor_color_occlusion = (255, 0, 0)  # НОВОЕ: Красный - окклюзия
 
         # Доступные скорости движения точки (пикселей в кадр)
-        self.available_speeds = [2.0, 4.0]
+        self.available_speeds = [3.33, 6.67]
 
         # Доступные длительности для задач с временем (миллисекунды)
         self.available_durations = [500, 1600, 2900]
