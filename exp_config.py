@@ -55,7 +55,7 @@ class BlockConfig:
         self.trajectories_category = trajectories_category
 
     def generate_trial_sequence(
-        self, available_speeds: List[float], available_durations: List[int]
+    self, available_speeds: List[float], available_durations: List[int]
     ) -> List[Dict[str, Any]]:
         """Генерирует случайную последовательность попыток для блока"""
         trials = []
@@ -63,14 +63,14 @@ class BlockConfig:
         # Создаем список всех попыток согласно распределению
         for task_type, count in self.tasks_distribution.items():
             for i in range(count):
-                # Случайно выбираем скорость для задач с траекторией (0,1,2)
+                # Случайно выбираем скорость для задач с траекторией (0,1)
                 speed = (
-                    random.choice(available_speeds) if task_type in [0, 1, 2] else None
+                    random.choice(available_speeds) if task_type in [0, 1] else None
                 )
 
-                # Длительность выбирается ТОЛЬКО для задачи воспроизведения (3)
+                # Длительность выбирается ТОЛЬКО для задачи воспроизведения (2)
                 duration = (
-                    random.choice(available_durations) if task_type == 3 else None
+                    random.choice(available_durations) if task_type == 2 else None
                 )
 
                 trials.append(
@@ -116,31 +116,25 @@ class ExperimentConfig:
         # Определяем задачи
         self.tasks: List[TaskConfig] = [
             TaskConfig(
-                "Задача 1: Окклюзия (половина)",
-                FixationShape.TRIANGLE,
-                has_trajectory=True,  # Есть траектория
-                occlusion_enabled=True,
-                occlusion_type="half",
+                "Задача 1: Окклюзия (половина)", 
+                FixationShape.TRIANGLE, 
+                has_trajectory=True,
+                occlusion_enabled=True, 
+                occlusion_type="half"
             ),
             TaskConfig(
-                "Задача 2: Без окклюзии",
-                FixationShape.RHOMBUS,
-                has_trajectory=True,  # Есть траектория
-                occlusion_enabled=False,
-                occlusion_type="half",
-            ),
-            TaskConfig(
-                "Задача 3: Оценка времени (без окклюзии)",
+                "Задача 2: Оценка времени после остановки", 
                 FixationShape.STAR,
-                has_trajectory=True,  # Есть траектория
+                has_trajectory=True,
                 occlusion_enabled=False,
                 occlusion_type="half",
                 timing_estimation=True,
+                reproduction_task=False,
             ),
             TaskConfig(
-                "Задача 4: Воспроизведение времени",
+                "Задача 3: Воспроизведение времени",
                 FixationShape.CROSS,
-                has_trajectory=False,  # НЕТ траектории - ключевое изменение!
+                has_trajectory=False,
                 occlusion_enabled=False,
                 occlusion_type="half",
                 timing_estimation=False,
@@ -149,19 +143,15 @@ class ExperimentConfig:
             ),
         ]
 
-        # Определяем блоки
+        # Определяем блоки (8 блоков с разными настройками)
         self.blocks: List[BlockConfig] = [
-            BlockConfig("Блок 1: Простые траектории", {0: 5, 1: 5, 2: 5, 3: 5}, "R"),
-            BlockConfig("Блок 2: Сложные траектории 1", {0: 5, 1: 5, 2: 5, 3: 5}, "H1"),
-            BlockConfig("Блок 3: Сложные траектории 2", {0: 5, 1: 5, 2: 5, 3: 5}, "H2"),
-            BlockConfig("Блок 4: Средние траектории 1", {0: 5, 1: 5, 2: 5, 3: 5}, "M1"),
-            BlockConfig("Блок 5: Средние траектории 2", {0: 5, 1: 5, 2: 5, 3: 5}, "M2"),
-            BlockConfig(
-                "Блок 6: Короткие траектории 1", {0: 5, 1: 5, 2: 5, 3: 5}, "S1"
-            ),
-            BlockConfig(
-                "Блок 7: Короткие траектории 2", {0: 5, 1: 5, 2: 5, 3: 5}, "S2"
-            ),
+            BlockConfig("Блок 1: Простые траектории", {0: 5, 1: 5, 2: 5}, "R"),
+            BlockConfig("Блок 2: Сложные траектории 1", {0: 5, 1: 5, 2: 5}, "H1"),
+            BlockConfig("Блок 3: Сложные траектории 2", {0: 5, 1: 5, 2: 5}, "H2"),
+            BlockConfig("Блок 4: Средние траектории 1", {0: 5, 1: 5, 2: 5}, "M1"),
+            BlockConfig("Блок 5: Средние траектории 2", {0: 5, 1: 5, 2: 5}, "M2"),
+            BlockConfig("Блок 6: Короткие траектории 1", {0: 5, 1: 5, 2: 5}, "S1"),
+            BlockConfig("Блок 7: Короткие траектории 2", {0: 5, 1: 5, 2: 5}, "S2"),
         ]
 
     def get_current_task_config(self, task_index: int) -> TaskConfig:
@@ -302,8 +292,13 @@ class ExperimentConfig:
             self.photo_sensor_color_passive = (255, 255, 255)
 
         # Загружаем цвет окклюзии
-        occlusion_color_data = config_dict.get("photo_sensor_color_occlusion", (255, 0, 0))
-        if isinstance(occlusion_color_data, (list, tuple)) and len(occlusion_color_data) >= 3:
+        occlusion_color_data = config_dict.get(
+            "photo_sensor_color_occlusion", (255, 0, 0)
+        )
+        if (
+            isinstance(occlusion_color_data, (list, tuple))
+            and len(occlusion_color_data) >= 3
+        ):
             self.photo_sensor_color_occlusion = (
                 int(occlusion_color_data[0]),
                 int(occlusion_color_data[1]),
@@ -314,7 +309,9 @@ class ExperimentConfig:
 
         # Значения по умолчанию соответствуют основным настройкам
         self.available_speeds = config_dict.get("available_speeds", [2.0, 4.0])
-        self.available_durations = config_dict.get("available_durations", [500, 1600, 2900])
+        self.available_durations = config_dict.get(
+            "available_durations", [500, 1600, 2900]
+        )
 
         # Загружаем задачи
         self.tasks = []

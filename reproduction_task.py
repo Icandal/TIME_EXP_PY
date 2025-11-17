@@ -146,3 +146,4 @@ class ReproductionTask:
     def is_complete(self) -> bool:
         """Проверяет, завершена ли задача"""
         return self.space_pressed
+    

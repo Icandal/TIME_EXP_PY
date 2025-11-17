@@ -18,11 +18,14 @@ class ExperimentState:
     def __init__(self) -> None:
         self.waiting_for_initial_start = True
         self.waiting_for_instruction = False
+        self.waiting_for_timing_delay = False  # НОВОЕ: задержка перед оценкой времени
         self.movement_started = False
         self.occlusion_started = False
         self.running = True
         self.instruction_delay_timer = 0
+        self.timing_delay_timer = 0  # НОВОЕ: таймер для задержки перед оценкой времени
         self.INSTRUCTION_DELAY = 900
+        self.TIMING_DELAY = 900  # НОВОЕ: задержка перед оценкой времени
 
 
 class KeyHandler:
@@ -108,8 +111,7 @@ class KeyHandler:
             and exp.moving_point.is_moving
             and not exp.moving_point.stopped_by_user
             and exp.current_task.has_trajectory
-            and not exp.current_task.timing_estimation
-            and not exp.current_task.reproduction_task
+            and not exp.current_task.reproduction_task  # Разрешаем для задач с оценкой времени
         )
 
     def _can_show_help(self) -> bool:
@@ -374,10 +376,11 @@ class Experiment:
             title="ЭКСПЕРИМЕНТ ПО ВОСПРИЯТИЮ ВРЕМЕНИ",
             instructions=[
                 "В этом эксперименте вы будете наблюдать за движущейся точкой.",
-                "Ваша задача - нажать ПРОБЕЛ в нужный момент времени.",
                 "",
-                "Эксперимент состоит из блоков с разными условиями.",
-                "Условия задач меняются случайным образом.",
+                "Типы задач:",
+                "1. Окклюзия: точка скрывается на части траектории",
+                "2. Оценка времени: остановите точку и оцените время движения", 
+                "3. Воспроизведение: запомните и воспроизведите время",
                 "",
                 "Управление:",
                 "• ПРОБЕЛ - остановить точку / продолжить",
@@ -492,7 +495,7 @@ class Experiment:
                 info_lines.append(f"Тип окклюзии: {self.current_task.occlusion_type}")
 
         if self.current_task.timing_estimation:
-            info_lines.append("Оценка времени: ДА")
+            info_lines.append("Оценка времени после остановки: ДА")
             
         if self.current_task.reproduction_task:
             info_lines.extend([
@@ -597,27 +600,33 @@ class Experiment:
             stopped_by_user=True, was_visible=was_visible
         )
 
+        # Записываем фактическое время движения до остановки
+        actual_duration = 0
         if (
             self.state.movement_started
             and self.data_collector.current_trial_data["movement_start_time"]
         ):
-            movement_duration = (
+            actual_duration = (
                 self.space_press_time
                 - self.data_collector.current_trial_data["movement_start_time"]
             )
-            self.data_collector.record_trajectory_duration(movement_duration)
+            self.data_collector.record_trajectory_duration(actual_duration)
 
-        # УБИРАЕМ сброс состояния фотосенсора при остановке пользователем
-        # Фотосенсор остается красным если точка была в окклюзии
-        # if self.photo_sensor_state == "occlusion":
-        #     self.photo_sensor_state = "active"
-        #     print("Пользователь остановил точку - сброс фотосенсора в черный цвет")
-
-        self.state.instruction_delay_timer = pygame.time.get_ticks()
-        self.state.waiting_for_instruction = True
+        # Для задач с оценкой времени: сразу запускаем оценку
+        if self.current_task.timing_estimation:
+            self.handle_timing_after_stop(actual_duration)
+        else:
+            # Для обычных задач: показываем инструкцию после задержки
+            self.state.instruction_delay_timer = pygame.time.get_ticks()
+            self.state.waiting_for_instruction = True
 
         reaction_time = self.space_press_time - self.start_time
         print(f"Пользователь остановил точку! Время реакции: {reaction_time}мс")
+
+    def handle_timing_after_stop(self, actual_duration: float):
+        """Обработка оценки времени после остановки точки пользователем"""
+        print(f"Запуск оценки времени после остановки! Фактическое время: {actual_duration}мс")
+        self.timing_screen.activate(actual_duration)
 
     def show_help_info(self):
         """Показать информацию о управлении"""
@@ -703,7 +712,7 @@ class Experiment:
 
     def handle_special_screens(self, event):
         """Обработка специальных экранов"""
-        # Обработка экрана оценки времени
+        # Обработка экрана оценки времени (после остановки точки)
         if self.timing_screen.is_active:
             if self.timing_screen.handle_event(event):
                 timing_results = self.timing_screen.get_results()
@@ -790,16 +799,10 @@ class Experiment:
             print("Траектория завершена - сброс фотосенсора в черный цвет")
 
         if self.current_task.timing_estimation:
-            self.handle_timing_task(actual_duration, current_time)
+            # Для задач с оценкой времени при автоматическом завершении
+            self.handle_timing_after_stop(actual_duration)
         else:
             self.handle_regular_task(actual_duration, current_time)
-
-    def handle_timing_task(self, actual_duration, current_time):
-        """Обработка задачи оценки времени"""
-        self.data_collector.record_trajectory_duration(actual_duration)
-        self.timing_screen.activate(actual_duration)
-        print(f"Траектория завершена! Фактическое время: {actual_duration}мс")
-        print("Переходим к оценке времени...")
 
     def handle_regular_task(self, actual_duration, current_time):
         """Обработка регулярной задачи"""
@@ -820,6 +823,7 @@ class Experiment:
             and not self.reproduction_task.is_active
             and current_time - self.state.instruction_delay_timer
             >= self.state.INSTRUCTION_DELAY
+            and not self.current_task.timing_estimation  # Не показываем задержку для задач с оценкой времени
         ):
 
             self.instruction_screen.activate()
@@ -847,6 +851,9 @@ class Experiment:
             # Обновление состояния
             if self.reproduction_task.is_active:
                 self.reproduction_task.update()
+            elif self.timing_screen.is_active:
+                # timing_screen обновляется через события
+                pass
             elif self.current_task.has_trajectory and not self.timing_screen.is_active and not self.instruction_screen.is_active:
                 self.update_moving_point(dt)
 
