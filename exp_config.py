@@ -10,18 +10,24 @@ class TaskConfig:
         self,
         name: str,
         fixation_shape: FixationShape,
-        has_trajectory: bool = True,  # НОВОЕ: имеет ли задача траекторию
+        has_trajectory: bool = True,
         occlusion_enabled: bool = True,
         occlusion_type: str = "half",
+        occlusion_range: List[float] | None = None,
         timing_estimation: bool = False,
         reproduction_task: bool = False,
         reproduction_duration=None,
     ):
         self.name = name
         self.fixation_shape = fixation_shape
-        self.has_trajectory = has_trajectory  # НОВОЕ: определяет, есть ли траектория
+        self.has_trajectory = has_trajectory
         self.occlusion_enabled = occlusion_enabled
         self.occlusion_type = occlusion_type
+        # ИСПРАВЛЕНО: правильная логика установки диапазона
+        if occlusion_range is None:
+            self.occlusion_range = [0.5, 1.0]  # По умолчанию: с половины до конца
+        else:
+            self.occlusion_range = occlusion_range
         self.timing_estimation = timing_estimation
         self.reproduction_task = reproduction_task
         self.reproduction_duration = reproduction_duration
@@ -31,9 +37,10 @@ class TaskConfig:
         return {
             "name": self.name,
             "fixation_shape": self.fixation_shape.value,
-            "has_trajectory": self.has_trajectory,  # НОВОЕ
+            "has_trajectory": self.has_trajectory,
             "occlusion_enabled": self.occlusion_enabled,
             "occlusion_type": self.occlusion_type,
+            "occlusion_range": self.occlusion_range,
             "timing_estimation": self.timing_estimation,
             "reproduction_task": self.reproduction_task,
             "reproduction_duration": self.reproduction_duration,
@@ -105,7 +112,7 @@ class ExperimentConfig:
         self.photo_sensor_offset_y = -80
         self.photo_sensor_color_active = (0, 0, 0)  # Черный - активный экран
         self.photo_sensor_color_passive = (255, 255, 255)  # Белый - инструкция
-        self.photo_sensor_color_occlusion = (255, 0, 0)  # НОВОЕ: Красный - окклюзия
+        self.photo_sensor_color_occlusion = (255, 0, 0)  # Красный - окклюзия
 
         # Доступные скорости движения точки (пикселей в кадр)
         self.available_speeds = [3.33, 6.67]
@@ -116,11 +123,12 @@ class ExperimentConfig:
         # Определяем задачи
         self.tasks: List[TaskConfig] = [
             TaskConfig(
-                "Задача 1: Окклюзия (половина)", 
+                "Задача 1: Окклюзия", 
                 FixationShape.TRIANGLE, 
                 has_trajectory=True,
                 occlusion_enabled=True, 
-                occlusion_type="half"
+                occlusion_type="custom",
+                occlusion_range=[0.1, 0.9]  # Окклюзия на процент траектории
             ),
             TaskConfig(
                 "Задача 2: Оценка времени после остановки", 
@@ -143,9 +151,9 @@ class ExperimentConfig:
             ),
         ]
 
-        # Определяем блоки (8 блоков с разными настройками)
+        # Определяем блоки (8 блоков с разными настройки)
         self.blocks: List[BlockConfig] = [
-            BlockConfig("Блок 1: Простые траектории", {0: 5, 1: 5, 2: 5}, "R"),
+            BlockConfig("Блок 1: Простые траектории", {0: 15, 1: 1, 2: 1}, "R"),
             BlockConfig("Блок 2: Сложные траектории 1", {0: 5, 1: 5, 2: 5}, "H1"),
             BlockConfig("Блок 3: Сложные траектории 2", {0: 5, 1: 5, 2: 5}, "H2"),
             BlockConfig("Блок 4: Средние траектории 1", {0: 5, 1: 5, 2: 5}, "M1"),
@@ -218,6 +226,22 @@ class ExperimentConfig:
                 errors.append(
                     f"Блок {i+1} ({block.name}): trajectories_category не может быть пустой"
                 )
+
+        # Проверка диапазонов окклюзии
+        for i, task in enumerate(self.tasks):
+            if task.occlusion_enabled and task.occlusion_range:
+                if len(task.occlusion_range) != 2:
+                    errors.append(
+                        f"Задача {i+1} ({task.name}): occlusion_range должен содержать 2 значения [start, end]"
+                    )
+                elif task.occlusion_range[0] < 0 or task.occlusion_range[1] > 1.0:
+                    errors.append(
+                        f"Задача {i+1} ({task.name}): occlusion_range значения должны быть в диапазоне [0, 1]"
+                    )
+                elif task.occlusion_range[0] >= task.occlusion_range[1]:
+                    errors.append(
+                        f"Задача {i+1} ({task.name}): occlusion_range start должен быть меньше end"
+                    )
 
         return errors
 
@@ -322,9 +346,10 @@ class ExperimentConfig:
                 fixation_shape=FixationShape(
                     task_data.get("fixation_shape", "triangle")
                 ),
-                has_trajectory=task_data.get("has_trajectory", True),  # НОВОЕ поле
+                has_trajectory=task_data.get("has_trajectory", True),
                 occlusion_enabled=task_data.get("occlusion_enabled", True),
                 occlusion_type=task_data.get("occlusion_type", "half"),
+                occlusion_range=task_data.get("occlusion_range", None),  # ИСПРАВЛЕНО
                 timing_estimation=task_data.get("timing_estimation", False),
                 reproduction_task=task_data.get("reproduction_task", False),
                 reproduction_duration=task_data.get("reproduction_duration", None),

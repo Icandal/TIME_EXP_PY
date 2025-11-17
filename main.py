@@ -357,6 +357,7 @@ class Experiment:
                     if self.current_task.occlusion_enabled
                     else "none"
                 ),
+                occlusion_range=self.current_task.occlusion_range  # НОВОЕ
             )
             if not self.current_task.occlusion_enabled:
                 self.moving_point.disable_occlusion()

@@ -5,7 +5,11 @@ from trajectory import Trajectory
 
 class MovingPoint:
     def __init__(
-        self, trajectory: Trajectory, speed: float = 5.0, occlusion_type: str = "half"
+        self, 
+        trajectory: Trajectory, 
+        speed: float = 5.0, 
+        occlusion_type: str = "half",
+        occlusion_range: List[float] | None = None  # НОВОЕ: диапазон окклюзии
     ):
         self.trajectory = trajectory
         self.speed = speed  # пикселей в кадр
@@ -20,7 +24,8 @@ class MovingPoint:
 
         # Настройки скрытия точки
         self.occlusion_enabled = True
-        self.occlusion_type = occlusion_type  # "half" или "third"
+        self.occlusion_type = occlusion_type  # "half" или "third" или "custom"
+        self.occlusion_range = occlusion_range or [0.5, 1.0]  # НОВОЕ: диапазон окклюзии
         self.occlusion_start_segment = 0
         self.occlusion_start_progress = 0.0
         self.occlusion_end_segment = 0
@@ -31,33 +36,53 @@ class MovingPoint:
         self._setup_automatic_occlusion()
 
     def set_occlusion_type(self, occlusion_type: str) -> None:
-        """Устанавливает тип окклюзии: 'half' (половина) или 'third' (треть)"""
+        """Устанавливает тип окклюзии: 'half' (половина) или 'third' (треть) или 'custom'"""
         self.occlusion_type = occlusion_type
         self._setup_automatic_occlusion()
 
+    def set_occlusion_range(self, occlusion_range: List[float]) -> None:
+        """Устанавливает диапазон окклюзии [start, end]"""
+        self.occlusion_range = occlusion_range
+        self._setup_automatic_occlusion()
+
     def _setup_automatic_occlusion(self) -> None:
-        """Автоматически настраивает окклюдер в зависимости от типа"""
+        """Автоматически настраивает окклюдер в зависимости от типа и диапазона"""
         total_segments = len(self.trajectory.points) - 1
         if total_segments <= 0:
             return
 
-        # Определяем точку начала окклюзии в зависимости от типа
-        if self.occlusion_type == "half":
-            occlusion_start_progress = 0.5  # Начинаем с половины траектории
-        else:  # "third"
-            occlusion_start_progress = 2.0 / 3.0  # Начинаем с 2/3 траектории
+        # ВСЕГДА используем пользовательский диапазон, если он задан
+        # независимо от occlusion_type
+        if self.occlusion_range and len(self.occlusion_range) == 2:
+            occlusion_start_progress = self.occlusion_range[0]
+            occlusion_end_progress = self.occlusion_range[1]
+            print(f"Установлена пользовательская окклюзия: [{occlusion_start_progress:.2f}, {occlusion_end_progress:.2f}]")
+        else:
+            # Резервные значения по умолчанию
+            if self.occlusion_type == "half":
+                occlusion_start_progress = 0.5
+                occlusion_end_progress = 1.0
+            elif self.occlusion_type == "third":
+                occlusion_start_progress = 2.0 / 3.0
+                occlusion_end_progress = 1.0
+            else:
+                occlusion_start_progress = 0.5
+                occlusion_end_progress = 1.0
 
         # Находим сегмент и прогресс для начала окклюзии
         self.occlusion_start_segment, self.occlusion_start_progress = (
             self._find_segment_and_progress(occlusion_start_progress)
         )
 
-        # Окклюзия продолжается до конца траектории
-        self.occlusion_end_segment = total_segments - 1
-        self.occlusion_end_progress = 1.0
+        # Находим сегмент и прогресс для конца окклюзии
+        self.occlusion_end_segment, self.occlusion_end_progress = (
+            self._find_segment_and_progress(occlusion_end_progress)
+        )
 
         # Включаем окклюзию по умолчанию
         self.occlusion_enabled = True
+        
+        print(f"Окклюзия настроена: сегмент {self.occlusion_start_segment} прогресс {self.occlusion_start_progress:.2f} -> сегмент {self.occlusion_end_segment} прогресс {self.occlusion_end_progress:.2f}")
 
     def _find_segment_and_progress(self, target_progress: float) -> Tuple[int, float]:
         """Находит сегмент и прогресс для заданного общего прогресса по траектории"""
@@ -277,6 +302,7 @@ class MovingPoint:
         return {
             "enabled": self.occlusion_enabled,
             "type": self.occlusion_type,
+            "range": self.occlusion_range,
             "start_segment": self.occlusion_start_segment,
             "start_progress": self.occlusion_start_progress,
             "end_segment": self.occlusion_end_segment,
