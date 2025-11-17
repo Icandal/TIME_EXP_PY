@@ -18,14 +18,14 @@ class ExperimentState:
     def __init__(self) -> None:
         self.waiting_for_initial_start = True
         self.waiting_for_instruction = False
-        self.waiting_for_timing_delay = False  # НОВОЕ: задержка перед оценкой времени
+        self.waiting_for_timing_delay = False  # Задержка перед оценкой времени
         self.movement_started = False
         self.occlusion_started = False
         self.running = True
         self.instruction_delay_timer = 0
-        self.timing_delay_timer = 0  # НОВОЕ: таймер для задержки перед оценкой времени
+        self.timing_delay_timer = 0  # Таймер для задержки перед оценкой времени
         self.INSTRUCTION_DELAY = 900
-        self.TIMING_DELAY = 900  # НОВОЕ: задержка перед оценкой времени
+        self.TIMING_DELAY = 900  # Задержка перед оценкой времени
 
 
 class KeyHandler:
@@ -107,11 +107,12 @@ class KeyHandler:
             and not exp.state.waiting_for_initial_start
             and not exp.timing_screen.is_active
             and not exp.reproduction_task.is_active
+            and not exp.state.waiting_for_timing_delay  # Добавляем проверку
             and exp.moving_point is not None
             and exp.moving_point.is_moving
             and not exp.moving_point.stopped_by_user
             and exp.current_task.has_trajectory
-            and not exp.current_task.reproduction_task  # Разрешаем для задач с оценкой времени
+            and not exp.current_task.reproduction_task
         )
 
     def _can_show_help(self) -> bool:
@@ -582,6 +583,8 @@ class Experiment:
         self.state.movement_started = False
         self.state.occlusion_started = False
         self.state.instruction_delay_timer = 0
+        self.state.waiting_for_timing_delay = False  # Сбрасываем задержку
+        self.state.timing_delay_timer = 0
 
         # Начинаем новую попытку
         self.start_new_trial()
@@ -612,9 +615,11 @@ class Experiment:
             )
             self.data_collector.record_trajectory_duration(actual_duration)
 
-        # Для задач с оценкой времени: сразу запускаем оценку
+        # ДЛЯ ЗАДАЧ СО ЗВЕЗДОЧКОЙ: добавляем задержку 900 мс перед оценкой времени
         if self.current_task.timing_estimation:
-            self.handle_timing_after_stop(actual_duration)
+            self.state.timing_delay_timer = pygame.time.get_ticks()
+            self.state.waiting_for_timing_delay = True
+            print(f"Установлена задержка 900 мс перед оценкой времени. Фактическое время движения: {actual_duration}мс")
         else:
             # Для обычных задач: показываем инструкцию после задержки
             self.state.instruction_delay_timer = pygame.time.get_ticks()
@@ -784,6 +789,7 @@ class Experiment:
             and not self.state.waiting_for_initial_start
             and not self.timing_screen.is_active
             and not self.reproduction_task.is_active
+            and not self.state.waiting_for_timing_delay  # Добавляем проверку
             and self.moving_point is not None
             and self.current_task.has_trajectory
         )
@@ -825,10 +831,30 @@ class Experiment:
             >= self.state.INSTRUCTION_DELAY
             and not self.current_task.timing_estimation  # Не показываем задержку для задач с оценкой времени
         ):
-
             self.instruction_screen.activate()
             self.state.waiting_for_instruction = False
             print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
+
+    def check_timing_delay(self, current_time):
+        """Проверка задержки перед показом экрана оценки времени"""
+        if (
+            self.state.waiting_for_timing_delay
+            and not self.timing_screen.is_active
+            and current_time - self.state.timing_delay_timer >= self.state.TIMING_DELAY
+        ):
+            actual_duration = 0
+            if (
+                self.state.movement_started
+                and self.data_collector.current_trial_data["movement_start_time"]
+            ):
+                actual_duration = (
+                    self.state.timing_delay_timer
+                    - self.data_collector.current_trial_data["movement_start_time"]
+                )
+            
+            self.state.waiting_for_timing_delay = False
+            self.handle_timing_after_stop(actual_duration)
+            print("Задержка завершена, запуск экрана оценки времени...")
 
     def run(self):
         """Запуск основного цикла эксперимента"""
@@ -859,6 +885,9 @@ class Experiment:
 
             # Проверка задержки инструкции
             self.check_instruction_delay(current_time)
+            
+            # Проверка задержки перед оценкой времени (для задачи со звездочкой)
+            self.check_timing_delay(current_time)
 
             # Отрисовка
             self.screen.fill(self.BACKGROUND_COLOR)
