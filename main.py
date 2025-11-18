@@ -12,20 +12,74 @@ from reproduction_task import ReproductionTask
 from block_manager import BlockManager
 
 
+class FixationPreviewScreen:
+    """Экран предварительного показа фиксационной точки перед траекторией"""
+    
+    def __init__(self, screen_width: int, screen_height: int, fixation_size: int = 30):
+        self.screen_width = screen_width
+        self.screen_height = screen_height
+        self.fixation_size = fixation_size
+        self.is_active = False
+        self.start_time = 0
+        self.duration = 900  # 900 мс
+        self.background_color = (255, 255, 255)
+        
+        # Создаем фиксационную точку (будет установлена форма позже)
+        self.fixation_preview = FixationCross(
+            screen_width, screen_height, FixationShape.TRIANGLE, fixation_size
+        )
+        self.fixation_preview.set_color((0, 0, 0))
+    
+    def activate(self, fixation_shape: FixationShape) -> None:
+        """Активирует экран предпоказа фиксационной точки"""
+        self.is_active = True
+        self.start_time = pygame.time.get_ticks()
+        # Устанавливаем форму фиксационной точки
+        self.fixation_preview.set_shape(fixation_shape)
+        print(f"Активирован экран предпоказа {fixation_shape.value} (900 мс)")
+    
+    def deactivate(self) -> None:
+        """Деактивирует экран"""
+        self.is_active = False
+    
+    def update(self) -> bool:
+        """Обновляет состояние и возвращает True если время истекло"""
+        if not self.is_active:
+            return False
+        
+        current_time = pygame.time.get_ticks()
+        if current_time - self.start_time >= self.duration:
+            self.deactivate()
+            print(f"Экран предпоказа {self.fixation_preview.shape.value} завершен")
+            return True
+        return False
+    
+    def draw(self, screen: pygame.Surface) -> None:
+        """Рисует экран с фиксационной точкой"""
+        if not self.is_active:
+            return
+        
+        # Белый фон
+        screen.fill(self.background_color)
+        
+        # Рисуем фиксационную точку в центре
+        self.fixation_preview.draw(screen)
+
+
 class ExperimentState:
     """Класс для управления состоянием эксперимента"""
 
     def __init__(self) -> None:
         self.waiting_for_initial_start = True
         self.waiting_for_instruction = False
-        self.waiting_for_timing_delay = False  # Задержка перед оценкой времени
+        self.waiting_for_timing_delay = False
         self.movement_started = False
         self.occlusion_started = False
         self.running = True
         self.instruction_delay_timer = 0
-        self.timing_delay_timer = 0  # Таймер для задержки перед оценкой времени
+        self.timing_delay_timer = 0
         self.INSTRUCTION_DELAY = 900
-        self.TIMING_DELAY = 900  # Задержка перед оценкой времени
+        self.TIMING_DELAY = 900
 
 
 class KeyHandler:
@@ -103,11 +157,11 @@ class KeyHandler:
         exp = self.experiment
         return (
             not exp.instruction_screen.is_active
-            and not exp.state.waiting_for_instruction
             and not exp.state.waiting_for_initial_start
             and not exp.timing_screen.is_active
             and not exp.reproduction_task.is_active
-            and not exp.state.waiting_for_timing_delay  # Добавляем проверку
+            and not exp.state.waiting_for_timing_delay
+            and not exp.fixation_preview_screen.is_active  # Нельзя останавливать во время показа фиксации
             and exp.moving_point is not None
             and exp.moving_point.is_moving
             and not exp.moving_point.stopped_by_user
@@ -123,6 +177,7 @@ class KeyHandler:
             and not exp.state.waiting_for_initial_start
             and not exp.timing_screen.is_active
             and not exp.reproduction_task.is_active
+            and not exp.fixation_preview_screen.is_active
         )
 
     def _can_save(self) -> bool:
@@ -139,6 +194,7 @@ class ScreenManager:
             "initial_instruction": self.draw_initial_instruction,
             "timing": self.draw_timing_screen,
             "reproduction": self.draw_reproduction_task,
+            "fixation_preview": self.draw_fixation_preview,
             "main": self.draw_main_screen,
         }
 
@@ -155,6 +211,8 @@ class ScreenManager:
             return "timing"
         elif exp.reproduction_task.is_active:
             return "reproduction"
+        elif exp.fixation_preview_screen.is_active:
+            return "fixation_preview"
         else:
             return "main"
 
@@ -182,12 +240,16 @@ class ScreenManager:
         """Отрисовка задачи воспроизведения"""
         self.experiment.reproduction_task.draw(self.experiment.screen, None)
 
+    def draw_fixation_preview(self):
+        """Отрисовка экрана предпоказа фиксационной точки"""
+        self.experiment.fixation_preview_screen.draw(self.experiment.screen)
+
     def draw_main_screen(self):
         """Отрисовка основного экрана"""
         exp = self.experiment
 
         # Если активна специальная задача - НЕ рисуем основной интерфейс
-        if exp.reproduction_task.is_active or exp.timing_screen.is_active:
+        if exp.reproduction_task.is_active or exp.timing_screen.is_active or exp.fixation_preview_screen.is_active:
             return
 
         # Рисуем фиксационную точку
@@ -272,6 +334,11 @@ class Experiment:
 
         # Создаем задачу воспроизведения
         self.reproduction_task = ReproductionTask(self.screen_width, self.screen_height)
+        
+        # Создаем экран предпоказа фиксационной точки
+        self.fixation_preview_screen = FixationPreviewScreen(
+            self.screen_width, self.screen_height, self.config.fixation_size
+        )
 
         # Создаем фиксационную точку
         self.fixation = FixationCross(
@@ -357,7 +424,8 @@ class Experiment:
                     if self.current_task.occlusion_enabled
                     else "none"
                 ),
-                occlusion_range=self.current_task.occlusion_range  # НОВОЕ
+                occlusion_range=self.current_task.occlusion_range,
+                occlusion_delay=500  # НОВЫЙ ПАРАМЕТР: 500 мс задержки
             )
             if not self.current_task.occlusion_enabled:
                 self.moving_point.disable_occlusion()
@@ -472,6 +540,11 @@ class Experiment:
             )
             print(f"Непосредственный запуск задачи воспроизведения с длительностью {assigned_duration}мс")
             self.reproduction_task.activate(assigned_duration)
+        
+        # ДЛЯ ВСЕХ ЗАДАЧ С ТРАЕКТОРИЕЙ: активируем предпоказ фиксационной точки
+        elif self.current_task.has_trajectory:
+            self.fixation_preview_screen.activate(self.current_task.fixation_shape)
+            print(f"Активирован предпоказ {self.current_task.fixation_shape.value} перед траекторией")
 
     def print_current_trial_info(self):
         """Вывод информации о текущей попытке"""
@@ -495,6 +568,10 @@ class Experiment:
             
             if self.current_task.occlusion_enabled:
                 info_lines.append(f"Тип окклюзии: {self.current_task.occlusion_type}")
+                if self.current_task.occlusion_type == "timed":
+                    info_lines.append("Окклюзия по времени: через 500мс после начала движения")
+                elif self.current_task.occlusion_range:
+                    info_lines.append(f"Диапазон окклюзии: [{self.current_task.occlusion_range[0]:.1f}, {self.current_task.occlusion_range[1]:.1f}]")
 
         if self.current_task.timing_estimation:
             info_lines.append("Оценка времени после остановки: ДА")
@@ -584,7 +661,7 @@ class Experiment:
         self.state.movement_started = False
         self.state.occlusion_started = False
         self.state.instruction_delay_timer = 0
-        self.state.waiting_for_timing_delay = False  # Сбрасываем задержку
+        self.state.waiting_for_timing_delay = False
         self.state.timing_delay_timer = 0
 
         # Начинаем новую попытку
@@ -616,7 +693,7 @@ class Experiment:
             )
             self.data_collector.record_trajectory_duration(actual_duration)
 
-        # ДЛЯ ЗАДАЧ СО ЗВЕЗДОЧКОЙ: добавляем задержку 900 мс перед оценкой времени
+        # Для задач с оценкой времени: устанавливаем задержку перед оценкой
         if self.current_task.timing_estimation:
             self.state.timing_delay_timer = pygame.time.get_ticks()
             self.state.waiting_for_timing_delay = True
@@ -748,6 +825,11 @@ class Experiment:
             return
 
         if self.moving_point is not None:
+            # Запускаем отсчет времени при первом обновлении
+            if self.moving_point.movement_start_time is None and self.moving_point.is_moving:
+                self.moving_point.start_movement()
+                print("Отсчет времени для окклюзии запущен")
+            
             self.moving_point.update(dt)
             current_time = pygame.time.get_ticks()
 
@@ -790,7 +872,8 @@ class Experiment:
             and not self.state.waiting_for_initial_start
             and not self.timing_screen.is_active
             and not self.reproduction_task.is_active
-            and not self.state.waiting_for_timing_delay  # Добавляем проверку
+            and not self.state.waiting_for_timing_delay
+            and not self.fixation_preview_screen.is_active  # Не обновляем точку во время показа фиксации
             and self.moving_point is not None
             and self.current_task.has_trajectory
         )
@@ -857,6 +940,14 @@ class Experiment:
             self.handle_timing_after_stop(actual_duration)
             print("Задержка завершена, запуск экрана оценки времени...")
 
+    def check_fixation_preview(self, current_time):
+        """Проверка завершения показа фиксационной точки"""
+        if self.fixation_preview_screen.is_active:
+            if self.fixation_preview_screen.update():
+                # Фиксационная точка показана достаточно времени, начинаем движение
+                self.start_time = pygame.time.get_ticks()
+                print("Начинаем движение точки после показа фиксационной точки")
+
     def run(self):
         """Запуск основного цикла эксперимента"""
         print("=== Эксперимент запущен ===")
@@ -881,13 +972,16 @@ class Experiment:
             elif self.timing_screen.is_active:
                 # timing_screen обновляется через события
                 pass
+            elif self.fixation_preview_screen.is_active:  # Сначала фиксационная точка
+                self.check_fixation_preview(current_time)
             elif self.current_task.has_trajectory and not self.timing_screen.is_active and not self.instruction_screen.is_active:
+                # Только после фиксационной точки начинаем движение
                 self.update_moving_point(dt)
 
             # Проверка задержки инструкции
             self.check_instruction_delay(current_time)
             
-            # Проверка задержки перед оценкой времени (для задачи со звездочкой)
+            # Проверка задержки перед оценкой времени
             self.check_timing_delay(current_time)
 
             # Отрисовка

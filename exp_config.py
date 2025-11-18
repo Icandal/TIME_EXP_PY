@@ -123,12 +123,14 @@ class ExperimentConfig:
         # Определяем задачи
         self.tasks: List[TaskConfig] = [
             TaskConfig(
-                "Задача 1: Окклюзия", 
+                "Задача 1: Окклюзия по времени", 
                 FixationShape.TRIANGLE, 
                 has_trajectory=True,
-                occlusion_enabled=True, 
-                occlusion_type="custom",
-                occlusion_range=[0.1, 0.9]  # Окклюзия на процент траектории
+                occlusion_enabled=True,
+                occlusion_type="timed",  # Новый тип - окклюзия по времени
+                occlusion_range=None,    # Не используем диапазон
+                timing_estimation=False,
+                reproduction_task=False,
             ),
             TaskConfig(
                 "Задача 2: Оценка времени после остановки", 
@@ -153,7 +155,7 @@ class ExperimentConfig:
 
         # Определяем блоки (8 блоков с разными настройки)
         self.blocks: List[BlockConfig] = [
-            BlockConfig("Блок 1: Простые траектории", {0: 15, 1: 1, 2: 1}, "R"),
+            BlockConfig("Блок 1: Простые траектории", {0: 2, 1: 2, 2: 2}, "R"),
             BlockConfig("Блок 2: Сложные траектории 1", {0: 5, 1: 5, 2: 5}, "H1"),
             BlockConfig("Блок 3: Сложные траектории 2", {0: 5, 1: 5, 2: 5}, "H2"),
             BlockConfig("Блок 4: Средние траектории 1", {0: 5, 1: 5, 2: 5}, "M1"),
