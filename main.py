@@ -16,7 +16,7 @@ from block_manager import BlockManager
 class FixationPreviewScreen:
     """Экран предварительного показа фиксационной точки перед траекторией"""
     
-    def __init__(self, screen_width: int, screen_height: int, fixation_size: int = 30):
+    def __init__(self, screen_width: int, screen_height: int, fixation_size: int = 15):
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.fixation_size = fixation_size
@@ -471,28 +471,32 @@ class Experiment:
         self.initial_instruction_screen = InstructionScreen(
             self.screen_width, self.screen_height
         )
+        
+        # Адаптивное содержимое для начальной инструкции
+        instruction_lines = [
+            "ЭКСПЕРИМЕНТ ПО ВОСПРИЯТИЮ ВРЕМЕНИ",
+            "",
+            "В этом эксперименте вы будете наблюдать за движущейся точкой.",
+            "",
+            "Типы задач:",
+            "1. Окклюзия: точка скрывается на части траектории",
+            "2. Оценка времени: остановите точку и оцените время движения", 
+            "3. Воспроизведение: запомните и воспроизведите время",
+            "",
+            "Управление:",
+            "• ПРОБЕЛ - остановить точку / продолжить",
+            "• ESC - выход",
+            "",
+            "Нажмите ПРОБЕЛ чтобы начать эксперимент",
+        ]
+        
         self.initial_instruction_screen.set_custom_content(
-            title="ЭКСПЕРИМЕНТ ПО ВОСПРИЯТИЮ ВРЕМЕНИ",
-            instructions=[
-                "В этом эксперименте вы будете наблюдать за движущейся точкой.",
-                "",
-                "Типы задач:",
-                "1. Окклюзия: точка скрывается на части траектории",
-                "2. Оценка времени: остановите точку и оцените время движения", 
-                "3. Воспроизведение: запомните и воспроизведите время",
-                "",
-                "Управление:",
-                "• ПРОБЕЛ - остановить точку / продолжить",
-                "• H - справка",
-                "• S - сохранить данные",
-                "• ESC - выход",
-                "",
-                "Нажмите ПРОБЕЛ чтобы начать эксперимент",
-            ],
+            title=instruction_lines[0],
+            instructions=instruction_lines[1:]
         )
         self.initial_instruction_screen.activate()
 
-        self.timing_screen = TimingEstimationScreen(
+        self.timing_screen = TimingEstimationScreen( 
             self.screen_width, self.screen_height
         )
 
@@ -645,6 +649,8 @@ class Experiment:
         if block_completed:
             if self.block_manager.is_experiment_complete():
                 print("=== Эксперимент завершен! Все блоки пройдены. ===")
+                # СОХРАНЯЕМ ДАННЫЕ ПОСЛЕДНЕГО БЛОКА ПЕРЕД ВЫХОДОМ
+                self.save_current_data()
                 self.state.running = False
                 return
             else:
@@ -655,13 +661,8 @@ class Experiment:
     def handle_block_completion(self):
         """Обработка завершения блока"""
         # Сохраняем данные текущего блока
-        filename = save_experiment_data(
-            self.config.participant_id,
-            self.progress_info["block_number"],
-            self.data_collector.get_all_data(),
-        )
-        print(f"Блок {self.progress_info['block_number']} завершен! Данные сохранены в: {filename}")
-
+        self.save_current_data()
+        
         # Создаем новый сборщик данных для нового блока
         self.update_progress_info()
         self.data_collector = DataCollector(
@@ -797,13 +798,18 @@ class Experiment:
         print("\n".join(help_info))
 
     def save_current_data(self):
-        """Сохранение текущих данных"""
-        filename = save_experiment_data(
-            self.config.participant_id,
-            self.progress_info["block_number"],
-            self.data_collector.get_all_data(),
-        )
-        print(f"Данные текущего блока сохранены в файл: {filename}")
+        """Сохранение текущих данных блока"""
+        if self.data_collector and self.data_collector.get_all_data():
+            filename = save_experiment_data(
+                self.config.participant_id,
+                self.progress_info["block_number"],
+                self.data_collector.get_all_data(),
+            )
+            print(f"Данные блока {self.progress_info['block_number']} сохранены в файл: {filename}")
+            return filename
+        else:
+            print(f"Нет данных для сохранения в блоке {self.progress_info['block_number']}")
+            return ""
 
     def draw_indicator(self):
         """Рисует индикаторную окружность для фото-сенсора"""
@@ -1064,19 +1070,33 @@ class Experiment:
 
     def cleanup(self):
         """Очистка ресурсов"""
-        if not self.block_manager.is_experiment_complete():
-            print(f"\n=== Завершение эксперимента ===")
-            filename = save_experiment_data(
-                self.config.participant_id,
-                self.progress_info["block_number"],
-                self.data_collector.get_all_data(),
-            )
-            print(f"Данные текущего блока сохранены в файл: {filename}")
+        # ВСЕГДА сохраняем данные при завершении, независимо от способа выхода
+        try:
+            if not self.block_manager.is_experiment_complete():
+                print(f"\n=== Завершение эксперимента (досрочное) ===")
+                self.save_current_data()
+            else:
+                print(f"\n=== Эксперимент завершен (нормально) ===")
+                # Данные уже сохранены в handle_instruction_continue, но для надежности сохраняем еще раз
+                if self.data_collector and self.data_collector.get_all_data():
+                    self.save_current_data()
+        except Exception as e:
+            print(f"Ошибка при сохранении данных в cleanup: {e}")
+            # Пытаемся сохранить с значениями по умолчанию
+            try:
+                if self.data_collector and self.data_collector.get_all_data():
+                    filename = save_experiment_data(
+                        self.config.participant_id,
+                        1,  # блок по умолчанию
+                        self.data_collector.get_all_data(),
+                    )
+                    print(f"Данные сохранены в файл: {filename}")
+            except Exception as e2:
+                print(f"Критическая ошибка при сохранении: {e2}")
 
         pygame.mouse.set_visible(True)
         pygame.quit()
         sys.exit()
-
 
 def main() -> None:
     """Основная функция"""

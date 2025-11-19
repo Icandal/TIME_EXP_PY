@@ -17,7 +17,7 @@ class FixationCross:
         screen_width: int,
         screen_height: int,
         shape: FixationShape = FixationShape.TRIANGLE,
-        size: int = 30,
+        size: int = 15,
     ):
         self.screen_width = screen_width
         self.screen_height = screen_height
