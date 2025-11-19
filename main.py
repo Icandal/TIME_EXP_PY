@@ -1,5 +1,6 @@
 import pygame
 import sys
+from typing import Dict, Any, Optional
 from fixation import FixationCross, FixationShape
 from trajectory import TrajectoryManager
 from moving_point import MovingPoint
@@ -275,6 +276,11 @@ class Experiment:
         self.setup_components()
         self.key_handler = KeyHandler(self)
         self.screen_manager = ScreenManager(self)
+        
+        # Объявляем переменные
+        self.current_block = None
+        self.current_trial: Dict[str, Any] = {}
+        self.progress_info: Dict[str, Any] = {}
 
     def setup_pygame(self):
         """Настройка Pygame"""
@@ -295,7 +301,7 @@ class Experiment:
 
     def load_resources(self):
         """Загрузка ресурсов"""
-        self.trajectories_data = load_trajectories("trajectories.json")
+        self.trajectories_data = load_trajectories("traj_lib.json")
         self.trajectory_manager = TrajectoryManager(self.trajectories_data)
         self.config = ExperimentConfig()
 
@@ -378,13 +384,36 @@ class Experiment:
 
     def update_progress_info(self):
         """Обновление информации о прогрессе"""
-        self.progress_info = self.block_manager.get_progress_info()
-        self.current_block = self.block_manager.get_current_block()
-        self.current_trial = self.block_manager.get_current_trial()
+        if self.block_manager.is_experiment_complete():
+            print("Эксперимент завершен, нет активных блоков")
+            self.progress_info = {
+                "block_number": 0,
+                "total_blocks": len(self.block_manager.blocks),
+                "trial_in_block": 0,
+                "display_order": 0,
+                "total_trials_in_block": 0,
+                "block_name": "Эксперимент завершен",
+                "task_type": 0,
+                "trajectory_category": "none",
+                "actual_trajectory_category": "none", 
+                "trajectory_index": 0,
+                "speed": None,
+                "duration": None,
+            }
+            self.current_block = None
+            self.current_trial = {}
+        else:
+            self.progress_info = self.block_manager.get_progress_info()
+            self.current_block = self.block_manager.get_current_block()
+            self.current_trial = self.block_manager.get_current_trial()
 
     def load_current_trajectory(self):
         """Загрузка текущей траектории (только для задач с траекторией)"""
         try:
+            if self.current_block is None:
+                print("Ошибка: текущий блок не определен")
+                return
+                
             actual_category = self.current_trial.get(
                 "actual_trajectory_category", self.current_block.trajectories_category
             )
@@ -493,12 +522,20 @@ class Experiment:
 
     def start_new_trial(self):
         """Начало новой попытки"""
-        # Определяем тип условия
-        if self.current_task.reproduction_task:
+        # Проверяем, что текущий блок существует
+        if self.current_block is None:
+            print("Ошибка: нет активного блока")
+            return
+            
+        # Используем декодированные параметры для определения типа условия
+        decoded_params = self.current_trial.get("decoded_params", {})
+        
+        # Определяем тип условия на основе декодированной задачи
+        if decoded_params.get("task_index") == 2:  # C3 - воспроизведение времени
             condition_type = "reproduction"
-        elif self.current_task.timing_estimation:
+        elif decoded_params.get("task_index") == 1:  # C2 - оценка времени
             condition_type = "timing_estimation"
-        else:
+        else:  # C1 - окклюзия или по умолчанию
             condition_type = (
                 f"occlusion_{self.current_task.occlusion_type}"
                 if self.current_task.occlusion_enabled
@@ -548,9 +585,17 @@ class Experiment:
 
     def print_current_trial_info(self):
         """Вывод информации о текущей попытке"""
+        block_name = self.current_block.name if self.current_block else 'N/A'
+        trajectory_category = self.current_block.trajectories_category if self.current_block else 'N/A'
+        
+        # Получаем декодированные параметры
+        decoded_params = self.current_trial.get("decoded_params", {})
+        decoded_category = decoded_params.get("decoded_category", "N/A")
+        
         info_lines = [
-            f"=== Блок {self.progress_info['block_number']}/{self.progress_info['total_blocks']}: {self.current_block.name} ===",
+            f"=== Блок {self.progress_info['block_number']}/{self.progress_info['total_blocks']}: {block_name} ===",
             f"=== {self.current_task.name} ===",
+            f"Декодированная категория: {decoded_category}",
             f"Попытка: {self.progress_info['trial_in_block']}/{self.progress_info['total_trials_in_block']} (порядок: {self.progress_info['display_order']})",
             f"Тип задачи: {'С траекторией' if self.current_task.has_trajectory else 'Без траектории'}",
             f"Фиксационная точка: {self.current_task.fixation_shape.value}",
@@ -559,7 +604,7 @@ class Experiment:
         if self.current_task.has_trajectory:
             trajectory_info = self.trajectory_manager.get_current_trajectory_info()
             info_lines.extend([
-                f"Загружена траектория {self.current_block.trajectories_category}[{self.current_trial['trajectory_index']}]",
+                f"Загружена траектория {trajectory_category}[{self.current_trial['trajectory_index']}]",
                 f"Длина траектории: {trajectory_info.get('total_length', 0):.1f} пикселей",
                 f"Расчетная продолжительность: {self.calculated_duration:.0f} мс",
                 f"Назначенная скорость: {self.assigned_speed} px/кадр",
@@ -598,16 +643,18 @@ class Experiment:
         block_completed = self.block_manager.move_to_next_trial()
 
         if block_completed:
-            self.handle_block_completion()
             if self.block_manager.is_experiment_complete():
                 print("=== Эксперимент завершен! Все блоки пройдены. ===")
                 self.state.running = False
                 return
+            else:
+                self.handle_block_completion()
 
         self.setup_next_trial()
 
     def handle_block_completion(self):
         """Обработка завершения блока"""
+        # Сохраняем данные текущего блока
         filename = save_experiment_data(
             self.config.participant_id,
             self.progress_info["block_number"],
@@ -624,6 +671,26 @@ class Experiment:
     def setup_next_trial(self):
         """Настройка следующей попытки"""
         self.update_progress_info()
+        
+        # Проверяем, не завершен ли эксперимент
+        if self.block_manager.is_experiment_complete():
+            print("Эксперимент завершен, нет следующих попыток")
+            return
+            
+        # Используем декодированные параметры из категории траектории
+        decoded_params = self.current_trial.get("decoded_params", {})
+        if decoded_params:
+            # Переопределяем тип задачи и параметры на основе декодированной категории
+            task_type = decoded_params.get("task_index", self.current_trial["task_type"])
+            speed = decoded_params.get("speed")
+            duration = decoded_params.get("duration")
+            
+            self.current_trial["task_type"] = task_type
+            self.current_trial["speed"] = speed
+            self.current_trial["duration"] = duration
+            
+            print(f"Применены параметры из категории: задача={task_type}, скорость={speed}, длительность={duration}")
+        
         self.current_task = self.config.get_current_task_config(
             self.current_trial["task_type"]
         )
@@ -713,13 +780,15 @@ class Experiment:
 
     def show_help_info(self):
         """Показать информацию о управлении"""
+        block_name = self.current_block.name if self.current_block else 'N/A'
+        
         help_info = [
             "=== Управление ===",
             "ПРОБЕЛ: Остановить точку / продолжить",
             "H: Показать справку",
             "S: Сохранить данные",
             "ESC: Выход",
-            f"Текущий блок: {self.progress_info['block_number']}/{self.progress_info['total_blocks']} - {self.current_block.name}",
+            f"Текущий блок: {self.progress_info['block_number']}/{self.progress_info['total_blocks']} - {block_name}",
             f"Текущая задача: {self.current_task.name}",
             f"Тип: {'С траекторией' if self.current_task.has_trajectory else 'Без траектории'}",
             f"Прогресс: {self.progress_info['trial_in_block']}/{self.progress_info['total_trials_in_block']} попыток",
@@ -769,9 +838,11 @@ class Experiment:
 
         font = pygame.font.Font(None, 24)
 
+        block_name = self.current_block.name if self.current_block else 'N/A'
+        
         info_texts = [
             f"Задача: {self.current_task.name}",
-            f"Блок: {self.progress_info['block_number']}/{self.progress_info['total_blocks']} - {self.current_block.name}",
+            f"Блок: {self.progress_info['block_number']}/{self.progress_info['total_blocks']} - {block_name}",
             f"Прогресс: {self.progress_info['trial_in_block']}/{self.progress_info['total_trials_in_block']}",
             f"Тип: {'С траекторией' if self.current_task.has_trajectory else 'Без траектории'}",
         ]

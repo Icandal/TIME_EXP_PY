@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 
 
-def load_trajectories(filename: str = "trajectories.json") -> Dict[str, Any]:
+def load_trajectories(filename: str = "traj_lib.json") -> Dict[str, Any]:
     """Загрузка траекторий из JSON файла"""
     try:
         with open(filename, "r", encoding="utf-8") as f:

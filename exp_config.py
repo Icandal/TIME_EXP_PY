@@ -23,9 +23,8 @@ class TaskConfig:
         self.has_trajectory = has_trajectory
         self.occlusion_enabled = occlusion_enabled
         self.occlusion_type = occlusion_type
-        # ИСПРАВЛЕНО: правильная логика установки диапазона
         if occlusion_range is None:
-            self.occlusion_range = [0.5, 1.0]  # По умолчанию: с половины до конца
+            self.occlusion_range = [0.5, 1.0]
         else:
             self.occlusion_range = occlusion_range
         self.timing_estimation = timing_estimation
@@ -53,10 +52,6 @@ class BlockConfig:
     def __init__(
         self, name: str, tasks_distribution: Dict[int, int], trajectories_category: str
     ):
-        """
-        tasks_distribution: словарь {тип_задачи: количество_повторений}
-        trajectories_category: категория траекторий для этого блока
-        """
         self.name = name
         self.tasks_distribution = tasks_distribution
         self.trajectories_category = trajectories_category
@@ -64,39 +59,10 @@ class BlockConfig:
     def generate_trial_sequence(
     self, available_speeds: List[float], available_durations: List[int]
     ) -> List[Dict[str, Any]]:
-        """Генерирует случайную последовательность попыток для блока"""
-        trials = []
-
-        # Создаем список всех попыток согласно распределению
-        for task_type, count in self.tasks_distribution.items():
-            for i in range(count):
-                # Случайно выбираем скорость для задач с траекторией (0,1)
-                speed = (
-                    random.choice(available_speeds) if task_type in [0, 1] else None
-                )
-
-                # Длительность выбирается ТОЛЬКО для задачи воспроизведения (2)
-                duration = (
-                    random.choice(available_durations) if task_type == 2 else None
-                )
-
-                trials.append(
-                    {
-                        "task_type": task_type,
-                        "speed": speed,
-                        "duration": duration,
-                        "trial_in_block": len(trials) + 1,
-                    }
-                )
-
-        # Перемешиваем последовательность
-        random.shuffle(trials)
-
-        # Добавляем номера попыток после перемешивания
-        for i, trial in enumerate(trials):
-            trial["display_order"] = i + 1
-
-        return trials
+        """Генерирует последовательность попыток для блока"""
+        # Если распределение задач пустое, вернем пустой список
+        # Фактическая последовательность будет создана в BlockManager
+        return []
 
 
 class ExperimentConfig:
@@ -110,30 +76,32 @@ class ExperimentConfig:
         self.photo_sensor_radius = 20
         self.photo_sensor_offset_x = -80
         self.photo_sensor_offset_y = -80
-        self.photo_sensor_color_active = (0, 0, 0)  # Черный - активный экран
-        self.photo_sensor_color_passive = (255, 255, 255)  # Белый - инструкция
-        self.photo_sensor_color_occlusion = (255, 0, 0)  # Красный - окклюзия
+        self.photo_sensor_color_active = (0, 0, 0)
+        self.photo_sensor_color_passive = (255, 255, 255)
+        self.photo_sensor_color_occlusion = (255, 0, 0)
 
         # Доступные скорости движения точки (пикселей в кадр)
-        self.available_speeds = [3.33, 6.67]
+        self.available_speeds = [8.99, 18.00]
 
         # Доступные длительности для задач с временем (миллисекунды)
         self.available_durations = [500, 1600, 2900]
 
-        # Определяем задачи
+        # Определяем задачи согласно новой системе кодировки
         self.tasks: List[TaskConfig] = [
+            # C1 - задачи с окклюдером
             TaskConfig(
-                "Задача 1: Окклюзия по времени", 
+                "C1: Окклюзия по времени", 
                 FixationShape.TRIANGLE, 
                 has_trajectory=True,
                 occlusion_enabled=True,
-                occlusion_type="timed",  # Новый тип - окклюзия по времени
-                occlusion_range=None,    # Не используем диапазон
+                occlusion_type="timed",
+                occlusion_range=None,
                 timing_estimation=False,
                 reproduction_task=False,
             ),
+            # C2 - остановка и воспроизведение движения
             TaskConfig(
-                "Задача 2: Оценка времени после остановки", 
+                "C2: Оценка времени после остановки", 
                 FixationShape.STAR,
                 has_trajectory=True,
                 occlusion_enabled=False,
@@ -141,8 +109,9 @@ class ExperimentConfig:
                 timing_estimation=True,
                 reproduction_task=False,
             ),
+            # C3 - задача на воспроизведение времени
             TaskConfig(
-                "Задача 3: Воспроизведение времени",
+                "C3: Воспроизведение времени",
                 FixationShape.CROSS,
                 has_trajectory=False,
                 occlusion_enabled=False,
@@ -153,16 +122,67 @@ class ExperimentConfig:
             ),
         ]
 
-        # Определяем блоки (8 блоков с разными настройки)
+        # Определяем блоки - все категории будут обрабатываться последовательно
         self.blocks: List[BlockConfig] = [
-            BlockConfig("Блок 1: Простые траектории", {0: 2, 1: 2, 2: 2}, "R"),
-            BlockConfig("Блок 2: Сложные траектории 1", {0: 5, 1: 5, 2: 5}, "H1"),
-            BlockConfig("Блок 3: Сложные траектории 2", {0: 5, 1: 5, 2: 5}, "H2"),
-            BlockConfig("Блок 4: Средние траектории 1", {0: 5, 1: 5, 2: 5}, "M1"),
-            BlockConfig("Блок 5: Средние траектории 2", {0: 5, 1: 5, 2: 5}, "M2"),
-            BlockConfig("Блок 6: Короткие траектории 1", {0: 5, 1: 5, 2: 5}, "S1"),
-            BlockConfig("Блок 7: Короткие траектории 2", {0: 5, 1: 5, 2: 5}, "S2"),
+            BlockConfig("Последовательные категории", {}, "sequential"),
         ]
+
+    def decode_category(self, category: str) -> Dict[str, Any]:
+        """Декодирует категорию траектории в параметры задачи"""
+        if len(category) != 6:  # Формат: C1S1D1
+            return self._get_default_parameters()
+        
+        try:
+            task_type = category[1]  # C1 -> "1"
+            speed_type = category[3]  # S1 -> "1" 
+            duration_type = category[5]  # D1 -> "1"
+            
+            # Определяем тип задачи
+            if task_type == "1":
+                task_index = 0  # C1 - окклюзия
+            elif task_type == "2":
+                task_index = 1  # C2 - оценка времени
+            elif task_type == "3":
+                task_index = 2  # C3 - воспроизведение времени
+            else:
+                task_index = 0  # По умолчанию
+            
+            # Определяем скорость
+            if speed_type == "1":
+                speed = 8.99  # S1 - медленная скорость
+            elif speed_type == "2":
+                speed = 18.00  # S2 - быстрая скорость
+            else:
+                speed = 8.99  # По умолчанию
+            
+            # Определяем длительность (для C3 задач)
+            if duration_type == "1":
+                duration = 500
+            elif duration_type == "2":
+                duration = 1600
+            elif duration_type == "3":
+                duration = 2900
+            else:
+                duration = 500  # По умолчанию
+            
+            return {
+                "task_index": task_index,
+                "speed": speed,
+                "duration": duration,
+                "decoded_category": f"C{task_type}S{speed_type}D{duration_type}"
+            }
+            
+        except (IndexError, ValueError):
+            return self._get_default_parameters()
+
+    def _get_default_parameters(self) -> Dict[str, Any]:
+        """Возвращает параметры по умолчанию"""
+        return {
+            "task_index": 0,
+            "speed": 8.99,
+            "duration": 500,
+            "decoded_category": "C1S1D1"
+        }
 
     def get_current_task_config(self, task_index: int) -> TaskConfig:
         """Возвращает конфигурацию для текущей задачи"""
@@ -197,20 +217,6 @@ class ExperimentConfig:
             dur <= 0 for dur in self.available_durations
         ):
             errors.append("available_durations должен содержать положительные значения")
-
-        # Проверяем соответствие ожидаемым значениям
-        expected_speeds = [2.0, 4.0]
-        expected_durations = [500, 1600, 2900]
-
-        if self.available_speeds != expected_speeds:
-            errors.append(
-                f"available_speeds должен быть {expected_speeds}, получено {self.available_speeds}"
-            )
-
-        if self.available_durations != expected_durations:
-            errors.append(
-                f"available_durations должен быть {expected_durations}, получено {self.available_durations}"
-            )
 
         if not self.tasks:
             errors.append("Список tasks не может быть пустым")
@@ -334,7 +340,7 @@ class ExperimentConfig:
             self.photo_sensor_color_occlusion = (255, 0, 0)
 
         # Значения по умолчанию соответствуют основным настройкам
-        self.available_speeds = config_dict.get("available_speeds", [2.0, 4.0])
+        self.available_speeds = config_dict.get("available_speeds", [8.99, 18.00])
         self.available_durations = config_dict.get(
             "available_durations", [500, 1600, 2900]
         )
@@ -351,7 +357,7 @@ class ExperimentConfig:
                 has_trajectory=task_data.get("has_trajectory", True),
                 occlusion_enabled=task_data.get("occlusion_enabled", True),
                 occlusion_type=task_data.get("occlusion_type", "half"),
-                occlusion_range=task_data.get("occlusion_range", None),  # ИСПРАВЛЕНО
+                occlusion_range=task_data.get("occlusion_range", None),
                 timing_estimation=task_data.get("timing_estimation", False),
                 reproduction_task=task_data.get("reproduction_task", False),
                 reproduction_duration=task_data.get("reproduction_duration", None),
@@ -365,8 +371,8 @@ class ExperimentConfig:
             block = BlockConfig(
                 name=block_data.get("name", "Блок"),
                 tasks_distribution=block_data.get(
-                    "tasks_distribution", {0: 5, 1: 5, 2: 5, 3: 5}
+                    "tasks_distribution", {0: 1, 1: 1, 2: 1}
                 ),
-                trajectories_category=block_data.get("trajectories_category", "T"),
+                trajectories_category=block_data.get("trajectories_category", "sequential"),
             )
             self.blocks.append(block)
