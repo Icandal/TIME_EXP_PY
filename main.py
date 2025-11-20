@@ -426,8 +426,13 @@ class Experiment:
 
     def calculate_trajectory_parameters(self):
         """Расчет параметров траектории (только для задач с траекторией)"""
+        # ИСПРАВЛЕНИЕ: Используем декодированные параметры для получения правильной скорости
+        decoded_params = self.current_trial.get("decoded_params", {})
+        
         self.assigned_speed = (
-            self.current_trial["speed"]
+            decoded_params.get("speed")  # Используем скорость из декодированных параметров
+            if decoded_params.get("speed") is not None
+            else self.current_trial["speed"]  # Резервный вариант
             if self.current_trial["speed"] is not None
             else self.config.available_speeds[0]
         )
@@ -441,21 +446,36 @@ class Experiment:
                     self.assigned_speed
                 )
             )
+            print(f"РАСЧЕТ ДЛИТЕЛЬНОСТИ В MAIN: {self.calculated_duration:.0f} мс")
 
     def create_moving_point(self):
         """Создание движущейся точки (только для задач с траекторией)"""
         if self.trajectory_manager.current_trajectory is not None:
+            # ИСПОЛЬЗУЕМ ОБНОВЛЕННУЮ СКОРОСТЬ
+            print(f"=== CREATE MOVING POINT ===")
+            print(f"  assigned_speed: {self.assigned_speed} px/кадр")
+            print(f"  type: {type(self.assigned_speed)}")
+            
+            # ПРОВЕРКА: убедимся, что assigned_speed правильный
+            if hasattr(self, 'current_trial') and self.current_trial:
+                print(f"  Скорость из current_trial: {self.current_trial.get('speed')}")
+            
             self.moving_point = MovingPoint(
                 self.trajectory_manager.current_trajectory,
-                speed=self.assigned_speed,
+                speed=self.assigned_speed,  # Используем обновленное значение
                 occlusion_type=(
                     self.current_task.occlusion_type
                     if self.current_task.occlusion_enabled
                     else "none"
                 ),
                 occlusion_range=self.current_task.occlusion_range,
-                occlusion_delay=500  # НОВЫЙ ПАРАМЕТР: 500 мс задержки
+                occlusion_delay=500
             )
+            
+            # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: убедимся, что скорость установлена правильно
+            print(f"  Скорость в созданной точке: {self.moving_point.speed} px/кадр")
+            print(f"  Тип скорости в точке: {type(self.moving_point.speed)}")
+                
             if not self.current_task.occlusion_enabled:
                 self.moving_point.disable_occlusion()
         else:
@@ -501,17 +521,33 @@ class Experiment:
         )
 
     def calculate_reference_times(self):
-        """Рассчитывает эталонные времена для анализа (только для задач с траекторией)"""
+        """ИСПРАВЛЕННЫЙ РАСЧЕТ: Рассчитывает эталонные времена для анализа"""
         if not self.moving_point or not self.trajectory_manager.current_trajectory:
             return
 
         trajectory = self.trajectory_manager.current_trajectory
         total_length = trajectory.total_length
-        speed = self.assigned_speed
+        speed_px_per_frame = self.assigned_speed
+        
+        # ТОЧНЫЙ расчет
+        frames_required = total_length / speed_px_per_frame
+        reference_response_time = frames_required * (1000 / 60)
 
-        fps = 60
-        frames_count = total_length / speed
-        reference_response_time = (frames_count / fps) * 1000
+        print(f"РАСЧЕТ ЭТАЛОННОГО ВРЕМЕНИ:")
+        print(f"  Длина траектории: {total_length:.1f} px")
+        print(f"  Скорость: {speed_px_per_frame} px/кадр")
+        print(f"  Требуется кадров: {frames_required:.1f}")
+        print(f"  Эталонное время: {reference_response_time:.0f} мс")
+
+        # ПРОВЕРКА: Расчет времени через разные методы
+        time_method1 = reference_response_time
+        time_method2 = (total_length / (speed_px_per_frame * 60)) * 1000  # через px/сек
+        time_method3 = trajectory.calculate_duration(speed_px_per_frame)
+        
+        print(f"  Проверка расчетов:")
+        print(f"    Метод 1 (кадры): {time_method1:.0f} мс")
+        print(f"    Метод 2 (px/сек): {time_method2:.0f} мс") 
+        print(f"    Метод 3 (trajectory): {time_method3:.0f} мс")
 
         stimulus_presentation_time = 0.0
         trajectory_completion_time = reference_response_time
@@ -521,8 +557,6 @@ class Experiment:
             stimulus_presentation_time,
             trajectory_completion_time,
         )
-
-        print(f"Расчет эталонного времени: {reference_response_time:.0f} мс")
 
     def start_new_trial(self):
         """Начало новой попытки"""
@@ -546,6 +580,12 @@ class Experiment:
                 else "no_occlusion"
             )
 
+        # ПРОВЕРКА СКОРОСТИ ПЕРЕД ЗАПИСЬЮ ДАННЫХ
+        print(f"ПРОВЕРКА СКОРОСТИ ПЕРЕД START_NEW_TRIAL:")
+        print(f"  current_trial speed: {self.current_trial.get('speed')}")
+        print(f"  assigned_speed: {self.assigned_speed}")
+        print(f"  decoded_params speed: {decoded_params.get('speed')}")
+
         # Записываем данные о попытке
         self.data_collector.start_new_trial(
             trajectory_type=(
@@ -554,7 +594,7 @@ class Experiment:
                 else "none"
             ),
             duration=self.calculated_duration if self.current_task.has_trajectory else 0,
-            speed=self.assigned_speed if self.current_task.has_trajectory else 0,
+            speed=self.assigned_speed if self.current_task.has_trajectory else 0,  # Используем assigned_speed
             trajectory_number=(
                 self.current_trial["trajectory_index"] 
                 if self.current_task.has_trajectory 
@@ -686,6 +726,7 @@ class Experiment:
             speed = decoded_params.get("speed")
             duration = decoded_params.get("duration")
             
+            # ОБНОВЛЯЕМ параметры в текущем испытании
             self.current_trial["task_type"] = task_type
             self.current_trial["speed"] = speed
             self.current_trial["duration"] = duration
@@ -695,6 +736,18 @@ class Experiment:
         self.current_task = self.config.get_current_task_config(
             self.current_trial["task_type"]
         )
+
+        # ОБНОВЛЯЕМ назначенную скорость на основе декодированных параметров
+        decoded_params = self.current_trial.get("decoded_params", {})
+        self.assigned_speed = (
+            decoded_params.get("speed")  # Используем скорость из декодированных параметров
+            if decoded_params.get("speed") is not None
+            else self.current_trial["speed"]  # Резервный вариант
+            if self.current_trial["speed"] is not None
+            else self.config.available_speeds[0]
+        )
+        
+        print(f"ФИНАЛЬНАЯ СКОРОСТЬ ДЛЯ ТОЧКИ: {self.assigned_speed} px/кадр")
 
         # Сбрасываем состояние фотосенсора при начале новой попытки
         self.photo_sensor_state = "active"
@@ -712,6 +765,12 @@ class Experiment:
                     self.create_moving_point()
                 else:
                     self.moving_point.reset(self.trajectory_manager.current_trajectory)
+                    # Явно обновляем скорость после reset
+                    print(f"=== ЯВНОЕ ОБНОВЛЕНИЕ СКОРОСТИ ===")
+                    print(f"  Скорость до обновления: {self.moving_point.speed} px/кадр")
+                    print(f"  Новая скорость: {self.assigned_speed} px/кадр")
+                    self.moving_point.speed = self.assigned_speed
+                    print(f"  Скорость после обновления: {self.moving_point.speed} px/кадр")
                     
                 # Проверяем, что moving_point не None перед вызовом методов
                 if self.moving_point is not None:
