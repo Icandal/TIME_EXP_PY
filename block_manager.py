@@ -1,7 +1,6 @@
 from typing import List, Dict, Any, Optional
 from exp_config import BlockConfig
 
-
 class BlockManager:
     def __init__(
         self,
@@ -11,82 +10,84 @@ class BlockManager:
         available_durations: List[int],
     ) -> None:
         self.trajectories_data: Dict[str, Any] = trajectories_data
-        self.blocks: List[BlockConfig] = blocks
         self.available_speeds: List[float] = available_speeds
         self.available_durations: List[int] = available_durations
+        
+        # СОЗДАЕМ БЛОКИ ИЗ СТРУКТУРЫ ФАЙЛА
+        self.blocks = self._create_blocks_from_file_structure()
         self.current_block_index = 0
         self.current_trial_index = 0
 
-        # ВЫВЕДЕМ ВСЕ ДОСТУПНЫЕ КАТЕГОРИИ ДЛЯ ОТЛАДКИ
-        print("=" * 50)
-        print("ДОСТУПНЫЕ КАТЕГОРИИ ТРАЕКТОРИЙ:")
-        print("=" * 50)
-        total_trajectories = 0
-        for category in sorted(trajectories_data.keys()):
-            count = len(trajectories_data[category])
-            total_trajectories += count
-            print(f"  '{category}': {count} траекторий")
-        print(f"ОБЩЕЕ КОЛИЧЕСТВО ТРАЕКТОРИЙ: {total_trajectories}")
-        print("=" * 50)
-
-        # Для последовательного выбора: отслеживаем текущий индекс для каждой категории
-        self.category_counters: Dict[str, int] = {}
-
-        # Инициализируем счетчики для всех категорий
-        for category in trajectories_data.keys():
-            self.category_counters[category] = 0
-
         # Генерируем последовательности для всех блоков
         self.block_sequences = []
-
-        for block_index, block in enumerate(blocks):
+        for block_index, block in enumerate(self.blocks):
             print(f"Обработка блока {block_index + 1}: '{block.name}'")
-            print(f"  Запрошенная категория: '{block.trajectories_category}'")
-
-            # Генерируем последовательность попыток для блока
-            # Теперь создаем попытки на основе всех доступных траекторий
-            trial_sequence = self._generate_sequential_trial_sequence()
-
-            print(f"  Создано {len(trial_sequence)} попыток для блока")
-
+            trial_sequence = self._generate_trial_sequence_for_block(block)
+            print(f"  Создано {len(trial_sequence)} попыток")
             self.block_sequences.append(trial_sequence)
-            print()
 
-    def _generate_sequential_trial_sequence(self) -> List[Dict[str, Any]]:
-        """Генерирует последовательность попыток на основе всех доступных траекторий"""
+    def _create_blocks_from_file_structure(self) -> List[BlockConfig]:
+        """Создает блоки на основе структуры файла"""
+        blocks = []
+        
+        print("=" * 50)
+        print("СОЗДАНИЕ БЛОКОВ ИЗ ФАЙЛА:")
+        print("=" * 50)
+        
+        for block_name in sorted(self.trajectories_data.keys()):
+            # Для каждого блока в файле создаем BlockConfig
+            block = BlockConfig(
+                name=block_name,
+                tasks_distribution={},  # Не используется в новой системе
+                trajectories_category=block_name  # Используем имя блока как категорию
+            )
+            blocks.append(block)
+            print(f"Создан блок: {block_name}")
+            
+        print(f"Всего создано {len(blocks)} блоков")
+        print("=" * 50)
+        
+        return blocks
+
+    def _generate_trial_sequence_for_block(self, block: BlockConfig) -> List[Dict[str, Any]]:
+        """Генерирует последовательность попыток для конкретного блока"""
         trials = []
-
-        # Получаем все категории в отсортированном порядке
-        available_categories = sorted(self.trajectories_data.keys())
-
-        for category in available_categories:
-            # Для каждой категории создаем попытки для всех траекторий
-            category_trajectories = self.trajectories_data[category]
-
-            for trajectory_idx in range(len(category_trajectories)):
-                # Декодируем параметры из названия категории
-                from exp_config import ExperimentConfig
-
-                config = ExperimentConfig()
-                decoded_params = config.decode_category(category)
-
+        block_data = self.trajectories_data[block.name]
+        
+        print(f"  Генерация попыток для блока '{block.name}':")
+        
+        # Проходим по всем категориям в блоке в порядке их следования в файле
+        for category, trajectories in block_data.items():
+            # Игнорируем нижнее подчеркивание в названии категории для декодирования
+            clean_category = category.split('_')[0]  # Убираем _1, _2 и т.д.
+            
+            # Декодируем параметры из названия категории
+            from exp_config import ExperimentConfig
+            config = ExperimentConfig()
+            decoded_params = config.decode_category(clean_category)
+            
+            print(f"    Категория: {category} -> {clean_category}")
+            print(f"      Задача: {decoded_params['task_index']}, "
+                f"Скорость: {decoded_params['speed']}, "
+                f"Длительность: {decoded_params['duration']}")
+            print(f"      Траекторий в категории: {len(trajectories)}")
+            
+            # Создаем попытки для всех траекторий в этой категории
+            for trajectory_idx in range(len(trajectories)):
                 trial = {
                     "task_type": decoded_params["task_index"],
                     "speed": decoded_params["speed"],
                     "duration": decoded_params["duration"],
                     "trajectory_index": trajectory_idx,
-                    "actual_trajectory_category": category,
+                    "actual_trajectory_category": category,  # Оригинальное название с _ если есть
                     "decoded_params": decoded_params,
+                    "block_name": block.name,
                     "trial_in_block": len(trials) + 1,
                     "display_order": len(trials) + 1,
                 }
-
                 trials.append(trial)
-                print(
-                    f"    Создана попытка: {category}[{trajectory_idx}] -> задача={decoded_params['task_index']}, скорость={decoded_params['speed']}, длительность={decoded_params['duration']}"
-                )
 
-        print(f"  Всего создано {len(trials)} попыток для всех категорий")
+        print(f"    Всего создано {len(trials)} попыток для блока {block.name}")
         return trials
 
     def get_current_block(self) -> Optional[BlockConfig]:
@@ -98,25 +99,18 @@ class BlockManager:
 
     def get_current_trial(self) -> Dict[str, Any]:
         """Возвращает текущую попытку"""
-        if self.current_block_index < len(
-            self.block_sequences
-        ) and self.current_trial_index < len(
-            self.block_sequences[self.current_block_index]
-        ):
-            return self.block_sequences[self.current_block_index][
-                self.current_trial_index
-            ]
-        else:
-            # Возвращаем пустой словарь как запасной вариант
-            return {}
+        if self.current_block_index < len(self.block_sequences):
+            block_trials = self.block_sequences[self.current_block_index]
+            if self.current_trial_index < len(block_trials):
+                return block_trials[self.current_trial_index]
+        
+        return {}
 
     def move_to_next_trial(self) -> bool:
         """Переходит к следующей попытке, возвращает True если блок завершен"""
         self.current_trial_index += 1
 
-        if self.current_trial_index >= len(
-            self.block_sequences[self.current_block_index]
-        ):
+        if self.current_trial_index >= len(self.block_sequences[self.current_block_index]):
             # Блок завершен
             self.current_trial_index = 0
             self.current_block_index += 1
@@ -135,7 +129,6 @@ class BlockManager:
     def get_progress_info(self) -> Dict[str, Any]:
         """Возвращает информацию о прогрессе"""
         if self.is_experiment_complete():
-            # Возвращаем информацию о завершенном эксперименте
             return {
                 "block_number": len(self.blocks),
                 "total_blocks": len(self.blocks),
@@ -180,29 +173,12 @@ class BlockManager:
             "trial_in_block": current_trial["trial_in_block"],
             "display_order": current_trial["display_order"],
             "total_trials_in_block": total_trials_in_block,
-            "block_name": current_block.name,
+            "block_name": current_trial["block_name"],  # Используем оригинальное имя блока
             "task_type": current_trial["task_type"],
-            "trajectory_category": current_block.trajectories_category,
-            "actual_trajectory_category": current_trial.get(
-                "actual_trajectory_category", current_block.trajectories_category
-            ),
+            "trajectory_category": current_block.name,
+            "actual_trajectory_category": current_trial["actual_trajectory_category"],
             "trajectory_index": current_trial["trajectory_index"],
             "speed": current_trial.get("speed"),
             "duration": current_trial.get("duration"),
             "decoded_params": current_trial.get("decoded_params", {}),
-        }
-
-    def get_used_trajectories_info(self) -> Dict[str, Any]:
-        """Возвращает информацию об использованных траекториях (для отладки)"""
-        total_trajectories = sum(
-            len(trajectories) for trajectories in self.trajectories_data.values()
-        )
-        used_trajectories = sum(self.category_counters.values())
-
-        return {
-            "category_counters": self.category_counters,
-            "total_categories": len(self.trajectories_data),
-            "total_trajectories": total_trajectories,
-            "used_trajectories": used_trajectories,
-            "remaining_trajectories": total_trajectories - used_trajectories,
         }

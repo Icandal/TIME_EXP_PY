@@ -5,10 +5,22 @@ from typing import Dict, Any, List
 
 
 def load_trajectories(filename: str = "traj_lib.json") -> Dict[str, Any]:
-    """Загрузка траекторий из JSON файла"""
+    """Загрузка траекторий из JSON файла с сохранением структуры блоков"""
     try:
         with open(filename, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        
+        print("=" * 60)
+        print("ЗАГРУЖЕНЫ ТРАЕКТОРИИ С БЛОКАМИ:")
+        print("=" * 60)
+        
+        # Просто возвращаем данные как есть, сохраняя структуру блоков
+        for block_name in sorted(data.keys()):
+            trajectories_count = sum(len(trajs) for trajs in data[block_name].values())
+            print(f"📦 {block_name}: {trajectories_count} траекторий")
+            
+        return data
+            
     except FileNotFoundError:
         print(f"Файл {filename} не найден!")
         return {}

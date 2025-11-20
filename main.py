@@ -249,19 +249,12 @@ class ScreenManager:
         """Отрисовка основного экрана"""
         exp = self.experiment
 
-        # Если активна специальная задача - НЕ рисуем основной интерфейс
-        if (
-            exp.reproduction_task.is_active
-            or exp.timing_screen.is_active
-            or exp.fixation_preview_screen.is_active
-        ):
-            return
-
         # Рисуем фиксационную точку
         exp.fixation.draw(exp.screen)
 
-        # Рисуем траекторию и точку только для задач с траекторией
-        if exp.current_task.has_trajectory:
+        # Рисуем траекторию и точку только для задач с траекторией и если траектория существует
+        if (exp.current_task.has_trajectory and 
+            exp.trajectory_manager.has_trajectory()):
             exp.trajectory_manager.draw_current(exp.screen)
             if exp.moving_point is not None:
                 exp.moving_point.draw(exp.screen)
@@ -417,82 +410,98 @@ class Experiment:
         """Загрузка текущей траектории (только для задач с траекторией)"""
         try:
             if self.current_block is None:
-                print("Ошибка: текущий блок не определен")
+                print("❌ Ошибка: текущий блок не определен")
                 return
 
-            actual_category = self.current_trial.get(
-                "actual_trajectory_category", self.current_block.trajectories_category
-            )
-            self.trajectory_manager.load_trajectory(
-                actual_category, self.current_trial["trajectory_index"]
-            )
-        except ValueError as e:
-            print(f"Ошибка загрузки траектории: {e}")
-            sys.exit()
+            # Загружаем траекторию только если задача требует траекторию
+            if self.current_task.has_trajectory:
+                block_name = self.current_trial["block_name"]
+                actual_category = self.current_trial["actual_trajectory_category"]
+                trajectory_index = self.current_trial["trajectory_index"]
+                
+                print(f"🔄 Загрузка траектории для задачи с траекторией:")
+                print(f"   Блок: {block_name}")
+                print(f"   Категория: {actual_category}")
+                print(f"   Индекс: {trajectory_index}")
+                
+                self.trajectory_manager.load_trajectory(
+                    block_name, actual_category, trajectory_index
+                )
+                
+                # Проверяем, что траектория загружена корректно
+                if self.trajectory_manager.has_trajectory():
+                    info = self.trajectory_manager.get_current_trajectory_info()
+                    print(f"✅ Траектория загружена: {info['point_count']} точек, длина: {info['total_length']:.1f}px")
+                else:
+                    print(f"⚠️  Пустая траектория для задачи с траекторией")
+            else:
+                # Для задач без траектории просто создаем пустую
+                self.trajectory_manager.current_trajectory = None
+                print("ℹ️ Задача без траектории - пропускаем загрузку")
+                
+        except Exception as e:
+            print(f"❌ Ошибка загрузки траектории: {e}")
+            # Создаем пустую траекторию вместо выхода
+            self.trajectory_manager.current_trajectory = None
+
 
     def calculate_trajectory_parameters(self):
         """Расчет параметров траектории (только для задач с траекторией)"""
-        # ИСПРАВЛЕНИЕ: Используем декодированные параметры для получения правильной скорости
-        decoded_params = self.current_trial.get("decoded_params", {})
+        if not self.current_task.has_trajectory:
+            self.assigned_speed = 0
+            self.calculated_duration = 0
+            print("ℹ️ Задача без траектории - пропускаем расчет параметров")
+            return
 
+        decoded_params = self.current_trial.get("decoded_params", {})
+        
         self.assigned_speed = (
-            decoded_params.get(
-                "speed"
-            )  # Используем скорость из декодированных параметров
+            decoded_params.get("speed")
             if decoded_params.get("speed") is not None
             else (
-                self.current_trial["speed"]  # Резервный вариант
+                self.current_trial["speed"]
                 if self.current_trial["speed"] is not None
                 else self.config.available_speeds[0]
             )
         )
 
         self.calculated_duration = 0.0
-        if self.trajectory_manager.current_trajectory is not None and hasattr(
-            self.trajectory_manager.current_trajectory, "calculate_duration"
-        ):
+        if (self.trajectory_manager.current_trajectory is not None and 
+            self.trajectory_manager.has_trajectory()):
             self.calculated_duration = (
                 self.trajectory_manager.current_trajectory.calculate_duration(
                     self.assigned_speed
                 )
             )
-            print(f"РАСЧЕТ ДЛИТЕЛЬНОСТИ В MAIN: {self.calculated_duration:.0f} мс")
+            print(f"📏 Расчет длительности: {self.calculated_duration:.0f} мс")
+        else:
+            print("⚠️ Невозможно рассчитать длительность - нет траектории")
 
     def create_moving_point(self):
-        """Создание движущейся точки (только для задач с траекторией)"""
-        if self.trajectory_manager.current_trajectory is not None:
-            # ИСПОЛЬЗУЕМ ОБНОВЛЕННУЮ СКОРОСТЬ
-            print(f"=== CREATE MOVING POINT ===")
-            print(f"  assigned_speed: {self.assigned_speed} px/кадр")
-            print(f"  type: {type(self.assigned_speed)}")
+        """Создание движущейся точки (только для задач с траекторией и непустой траекторией)"""
+        if (not self.current_task.has_trajectory or 
+            self.trajectory_manager.current_trajectory is None or
+            len(self.trajectory_manager.current_trajectory.points) < 2):
+            
+            self.moving_point = None
+            print("Задача без траектории или пустая траектория - пропускаем создание точки")
+            return
 
-            # ПРОВЕРКА: убедимся, что assigned_speed правильный
-            if hasattr(self, "current_trial") and self.current_trial:
-                print(f"  Скорость из current_trial: {self.current_trial.get('speed')}")
+        # Создаем точку только если есть траектория с точками
+        self.moving_point = MovingPoint(
+            self.trajectory_manager.current_trajectory,
+            speed=self.assigned_speed,
+            occlusion_type=(
+                self.current_task.occlusion_type
+                if self.current_task.occlusion_enabled
+                else "none"
+            ),
+            occlusion_range=self.current_task.occlusion_range,
+            occlusion_delay=500,
+        )
 
-            self.moving_point = MovingPoint(
-                self.trajectory_manager.current_trajectory,
-                speed=self.assigned_speed,  # Используем обновленное значение
-                occlusion_type=(
-                    self.current_task.occlusion_type
-                    if self.current_task.occlusion_enabled
-                    else "none"
-                ),
-                occlusion_range=self.current_task.occlusion_range,
-                occlusion_delay=500,
-            )
-
-            # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: убедимся, что скорость установлена правильно
-            print(f"  Скорость в созданной точке: {self.moving_point.speed} px/кадр")
-            print(f"  Тип скорости в точке: {type(self.moving_point.speed)}")
-
-            if not self.current_task.occlusion_enabled:
-                self.moving_point.disable_occlusion()
-        else:
-            print(
-                "Ошибка: Не удалось создать движущуюся точку - траектория не загружена"
-            )
-            sys.exit()
+        if not self.current_task.occlusion_enabled:
+            self.moving_point.disable_occlusion()
 
     def setup_screens(self):
         """Настройка экранов"""
@@ -1191,29 +1200,38 @@ class Experiment:
 
     def cleanup(self):
         """Очистка ресурсов"""
-        # ВСЕГДА сохраняем данные при завершении, независимо от способа выхода
         try:
-            if not self.block_manager.is_experiment_complete():
-                print(f"\n=== Завершение эксперимента (досрочное) ===")
-                self.save_current_data()
+            # Всегда пытаемся сохранить данные
+            if hasattr(self, 'data_collector') and self.data_collector and self.data_collector.get_all_data():
+                # Безопасно получаем номер блока
+                block_number = 1
+                if hasattr(self, 'progress_info') and self.progress_info and 'block_number' in self.progress_info:
+                    block_number = self.progress_info['block_number']
+                elif hasattr(self, 'block_manager') and self.block_manager and not self.block_manager.is_experiment_complete():
+                    block_number = self.block_manager.current_block_index + 1
+                
+                filename = save_experiment_data(
+                    self.config.participant_id,
+                    block_number,
+                    self.data_collector.get_all_data(),
+                )
+                print(f"✅ Данные сохранены в файл: {filename}")
             else:
-                print(f"\n=== Эксперимент завершен (нормально) ===")
-                # Данные уже сохранены в handle_instruction_continue, но для надежности сохраняем еще раз
-                if self.data_collector and self.data_collector.get_all_data():
-                    self.save_current_data()
+                print("ℹ️ Нет данных для сохранения")
+                
         except Exception as e:
-            print(f"Ошибка при сохранении данных в cleanup: {e}")
-            # Пытаемся сохранить с значениями по умолчанию
+            print(f"❌ Ошибка при сохранении данных: {e}")
+            # Пытаемся сохранить с минимальными данными
             try:
-                if self.data_collector and self.data_collector.get_all_data():
+                if hasattr(self, 'data_collector') and self.data_collector and self.data_collector.get_all_data():
                     filename = save_experiment_data(
-                        self.config.participant_id,
-                        1,  # блок по умолчанию
+                        "unknown",
+                        1,
                         self.data_collector.get_all_data(),
                     )
-                    print(f"Данные сохранены в файл: {filename}")
+                    print(f"✅ Данные экстренно сохранены в: {filename}")
             except Exception as e2:
-                print(f"Критическая ошибка при сохранении: {e2}")
+                print(f"💥 Критическая ошибка сохранения: {e2}")
 
         pygame.mouse.set_visible(True)
         pygame.quit()

@@ -1,7 +1,6 @@
 import pygame
 from typing import List, Tuple, Dict, Any
 
-
 class Trajectory:
     def __init__(self, points: List[Tuple[int, int]]):
         self.points = points
@@ -31,13 +30,10 @@ class Trajectory:
 
     def calculate_duration(self, speed: float) -> float:
         """Рассчитывает продолжительность движения по траектории в миллисекундах"""
-        if speed <= 0:
+        if speed <= 0 or len(self.points) < 2:
             return 0.0
 
-        # ИСПРАВЛЕНИЕ: speed уже в px/кадр, поэтому расчет проще
-        # Количество кадров = длина / скорость
         frames_count = self.total_length / speed
-        # Время в секундах = количество кадров / FPS
         time_seconds = frames_count / 60.0
         return time_seconds * 1000  # мс
 
@@ -50,15 +46,12 @@ class Trajectory:
         """Рисует точку старта"""
         if self.points:
             start_point = self.points[0]
-            pygame.draw.circle(
-                screen, (0, 255, 0), start_point, 8
-            )  # Зеленая точка старта
+            pygame.draw.circle(screen, (0, 255, 0), start_point, 8)
 
     def draw_target_zone(self, screen: pygame.Surface) -> None:
         """Рисует целевую зону (последний сегмент)"""
         if len(self.points) >= 2:
             end_point = self.points[-1]
-            # Простой синий круг радиусом 15 пикселей
             pygame.draw.circle(screen, (0, 0, 255), end_point, 15)
 
 
@@ -67,21 +60,76 @@ class TrajectoryManager:
         self.trajectories_data = trajectories_data
         self.current_trajectory = None
 
-    def load_trajectory(self, category: str, index: int) -> Trajectory:
-        """Загружает траекторию по категории и индексу"""
-        if category in self.trajectories_data and index < len(
-            self.trajectories_data[category]
-        ):
-            points_data = self.trajectories_data[category][index]
-            points = [(point["x"], point["y"]) for point in points_data]
-            self.current_trajectory = Trajectory(points)
+    def load_trajectory(self, block_name: str, category: str, index: int) -> Trajectory:
+        """Загружает траекторию по блоку, категории и индексу"""
+        try:
+            print(f"🔍 Загрузка траектории: {block_name}/{category}[{index}]")
+            
+            if (block_name in self.trajectories_data and 
+                category in self.trajectories_data[block_name]):
+                
+                trajectories = self.trajectories_data[block_name][category]
+                print(f"📊 Найдено траекторий в категории: {len(trajectories)}")
+                
+                # Если траектории пустые - создаем пустую траекторию
+                if not trajectories or not isinstance(trajectories, list):
+                    print(f"⚠️ Пустые траектории в {block_name}/{category}")
+                    self.current_trajectory = Trajectory([])
+                    return self.current_trajectory
+                
+                if index >= len(trajectories):
+                    print(f"⚠️ Индекс {index} вне диапазона (0-{len(trajectories)-1})")
+                    self.current_trajectory = Trajectory([])
+                    return self.current_trajectory
+                
+                points_data = trajectories[index]
+                print(f"📐 Тип данных точек: {type(points_data)}")
+                print(f"📐 Данные точки: {points_data}")
+                
+                points = []
+                
+                # ОБРАБОТКА РАЗНЫХ ФОРМАТОВ ДАННЫХ:
+                
+                # Формат 1: список точек [{'x': 1, 'y': 2}, {'x': 3, 'y': 4}, ...]
+                if isinstance(points_data, list):
+                    print("📁 Формат: список точек")
+                    for point in points_data:
+                        if isinstance(point, dict) and 'x' in point and 'y' in point:
+                            points.append((point["x"], point["y"]))
+                        else:
+                            print(f"⚠️ Некорректная точка в списке: {point}")
+                
+                # Формат 2: одна точка как словарь {'x': 1, 'y': 2}
+                elif isinstance(points_data, dict) and 'x' in points_data and 'y' in points_data:
+                    print("📄 Формат: одиночная точка как словарь")
+                    points.append((points_data["x"], points_data["y"]))
+                
+                else:
+                    print(f"⚠️ Неизвестный формат данных: {type(points_data)}")
+                    self.current_trajectory = Trajectory([])
+                    return self.current_trajectory
+                
+                print(f"✅ Загружено точек: {len(points)}")
+                for i, point in enumerate(points):
+                    print(f"   Точка {i}: ({point[0]}, {point[1]})")
+                
+                self.current_trajectory = Trajectory(points)
+                return self.current_trajectory
+            else:
+                print(f"❌ Блок '{block_name}' или категория '{category}' не найдены")
+                self.current_trajectory = Trajectory([])
+                return self.current_trajectory
+                
+        except Exception as e:
+            print(f"❌ Ошибка загрузки траектории: {e}")
+            import traceback
+            traceback.print_exc()
+            self.current_trajectory = Trajectory([])
             return self.current_trajectory
-        else:
-            raise ValueError(f"Траектория {category}[{index}] не найдена")
 
     def draw_current(self, screen: pygame.Surface) -> None:
-        """Рисует текущую траекторию"""
-        if self.current_trajectory:
+        """Рисует текущую траекторию (только если есть точки)"""
+        if self.current_trajectory and len(self.current_trajectory.points) > 1:
             self.current_trajectory.draw(screen)
             self.current_trajectory.draw_start_point(screen)
             self.current_trajectory.draw_target_zone(screen)
@@ -94,14 +142,9 @@ class TrajectoryManager:
                 "point_count": len(self.current_trajectory.points),
                 "points": self.current_trajectory.points,
             }
-        return {}
+        return {"total_length": 0, "point_count": 0, "points": []}
 
-    def get_trajectories_count(self, category: str) -> int:
-        """Возвращает количество траекторий в категории"""
-        if category in self.trajectories_data:
-            return len(self.trajectories_data[category])
-        return 0
-
-    def get_available_categories(self) -> List[str]:
-        """Возвращает список доступных категорий траекторий"""
-        return list(self.trajectories_data.keys())
+    def has_trajectory(self) -> bool:
+        """Проверяет, есть ли загруженная траектория с точками"""
+        return (self.current_trajectory is not None and 
+                len(self.current_trajectory.points) >= 2)  # Минимум 2 точки для траектории
