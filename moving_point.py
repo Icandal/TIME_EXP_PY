@@ -5,12 +5,12 @@ from trajectory import Trajectory
 
 class MovingPoint:
     def __init__(
-        self, 
-        trajectory: Trajectory, 
-        speed: float = 5.0, 
+        self,
+        trajectory: Trajectory,
+        speed: float = 5.0,
         occlusion_type: str = "half",
         occlusion_range: List[float] | None = None,
-        occlusion_delay: int = 500  # НОВЫЙ ПАРАМЕТР: задержка в мс
+        occlusion_delay: int = 500,  # НОВЫЙ ПАРАМЕТР: задержка в мс
     ):
         self.trajectory = trajectory
         self.speed = speed  # пикселей в кадр
@@ -36,8 +36,8 @@ class MovingPoint:
         # НОВЫЕ ПАРАМЕТРЫ ДЛЯ ВРЕМЕННОЙ ОККЛЮЗИИ
         self.occlusion_delay = occlusion_delay  # задержка перед окклюзией в мс
         self.movement_start_time = None  # время начала движения
-        self.occlusion_started = False   # флаг начала окклюзии
-        self.occlusion_active = False    # флаг активной окклюзии
+        self.occlusion_started = False  # флаг начала окклюзии
+        self.occlusion_active = False  # флаг активной окклюзии
 
         # Автоматическая настройка окклюдера
         self._setup_automatic_occlusion()
@@ -61,14 +61,18 @@ class MovingPoint:
         if self.occlusion_type == "timed":
             # Для временной окклюзии не нужны сегменты и прогресс
             self.occlusion_enabled = True
-            print(f"Установлена временная окклюзия: через {self.occlusion_delay}мс после начала движения")
+            print(
+                f"Установлена временная окклюзия: через {self.occlusion_delay}мс после начала движения"
+            )
         else:
             # ВСЕГДА используем пользовательский диапазон, если он задан
             # независимо от occlusion_type
             if self.occlusion_range and len(self.occlusion_range) == 2:
                 occlusion_start_progress = self.occlusion_range[0]
                 occlusion_end_progress = self.occlusion_range[1]
-                print(f"Установлена пользовательская окклюзия: [{occlusion_start_progress:.2f}, {occlusion_end_progress:.2f}]")
+                print(
+                    f"Установлена пользовательская окклюзия: [{occlusion_start_progress:.2f}, {occlusion_end_progress:.2f}]"
+                )
             else:
                 # Резервные значения по умолчанию
                 if self.occlusion_type == "half":
@@ -93,8 +97,10 @@ class MovingPoint:
 
             # Включаем окклюзию по умолчанию
             self.occlusion_enabled = True
-            
-            print(f"Окклюзия настроена: сегмент {self.occlusion_start_segment} прогресс {self.occlusion_start_progress:.2f} -> сегмент {self.occlusion_end_segment} прогресс {self.occlusion_end_progress:.2f}")
+
+            print(
+                f"Окклюзия настроена: сегмент {self.occlusion_start_segment} прогресс {self.occlusion_start_progress:.2f} -> сегмент {self.occlusion_end_segment} прогресс {self.occlusion_end_progress:.2f}"
+            )
 
     def _find_segment_and_progress(self, target_progress: float) -> Tuple[int, float]:
         """Находит сегмент и прогресс для заданного общего прогресса по траектории"""
@@ -145,7 +151,9 @@ class MovingPoint:
         self.movement_start_time = pygame.time.get_ticks()
         self.occlusion_started = False
         self.occlusion_active = False
-        print(f"Отсчет времени для окклюзии запущен. Окклюзия начнется через {self.occlusion_delay}мс")
+        print(
+            f"Отсчет времени для окклюзии запущен. Окклюзия начнется через {self.occlusion_delay}мс"
+        )
 
     def update(self, dt: float) -> None:
         """Обновляет позицию точки и видимость"""
@@ -202,31 +210,34 @@ class MovingPoint:
                 self.is_visible = True
                 self.occlusion_active = False
                 return
-                
+
             current_time = pygame.time.get_ticks()
             elapsed_time = current_time - self.movement_start_time
-            
+
             # Если прошло достаточно времени и окклюзия еще не началась - начинаем окклюзию
             if elapsed_time >= self.occlusion_delay and not self.occlusion_started:
                 self.occlusion_started = True
                 self.occlusion_active = True
                 self.is_visible = False
                 print(f"Окклюзия началась! Прошло {elapsed_time}мс")
-            
+
             # Если окклюзия уже началась - точка остается невидимой до конца движения
             elif self.occlusion_started:
                 self.occlusion_active = True
                 self.is_visible = False
-                
+
             else:
                 # До начала окклюзии - точка видима
                 self.occlusion_active = False
                 self.is_visible = True
-                
+
         else:
             # существующая логика для других типов окклюзии
             current_pos = (self.current_segment, self.progress)
-            occlusion_start = (self.occlusion_start_segment, self.occlusion_start_progress)
+            occlusion_start = (
+                self.occlusion_start_segment,
+                self.occlusion_start_progress,
+            )
             occlusion_end = (self.occlusion_end_segment, self.occlusion_end_progress)
 
             # Проверяем, находится ли точка в зоне скрытия
@@ -287,16 +298,20 @@ class MovingPoint:
             self.is_finished = True
             self.finished_timer = pygame.time.get_ticks()
             self.stopped_by_user = True
-            
+
             # ВАЖНОЕ ИЗМЕНЕНИЕ: если точка была в окклюзии при остановке, она остается невидимой
             if self.occlusion_active:
                 # Точка остановлена во время окклюзии - остается невидимой
                 self.is_visible = False
-                print("Точка остановлена пользователем во время окклюзии - остается невидимой")
+                print(
+                    "Точка остановлена пользователем во время окклюзии - остается невидимой"
+                )
             else:
                 # Точка остановлена вне окклюзии - становится видимой
                 self.is_visible = True
-                print("Точка остановлена пользователем вне окклюзии - становится видимой")
+                print(
+                    "Точка остановлена пользователем вне окклюзии - становится видимой"
+                )
 
     def should_switch_to_next(self):
         """Проверяет, нужно ли переключаться на следующую траекторию"""
@@ -354,12 +369,12 @@ class MovingPoint:
         self.is_finished = False
         self.finished_timer = 0
         self.stopped_by_user = False
-        
+
         # Сбрасываем временные параметры
         self.movement_start_time = None
         self.occlusion_started = False
         self.occlusion_active = False
-        
+
         # Сбрасываем настройки скрытия и настраиваем автоматический окклюдер
         self.occlusion_enabled = True
         self.is_visible = True

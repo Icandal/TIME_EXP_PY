@@ -38,7 +38,7 @@ class ReproductionTask:
         self.target_duration = target_duration
         self.space_pressed = False
         self.response_time = 0
-        
+
         print(f"=== АКТИВАЦИЯ ЗАДАЧИ ВОСПРОИЗВЕДЕНИЯ ===")
         print(f"Целевая длительность: {target_duration}мс")
         print(f"Начальное состояние: {self.state}")
@@ -60,7 +60,7 @@ class ReproductionTask:
                 self.response_time = pygame.time.get_ticks() - self.state_start_time
                 print(f"Ответ зарегистрирован: {self.response_time}мс")
                 return True
-                
+
         return False
 
     def update(self) -> None:
@@ -106,7 +106,9 @@ class ReproductionTask:
             # Первый кружок для запоминания времени
             center_x = self.screen_width // 2
             center_y = self.screen_height // 2
-            pygame.draw.circle(screen, self.circle_color, (center_x, center_y), self.circle_radius)
+            pygame.draw.circle(
+                screen, self.circle_color, (center_x, center_y), self.circle_radius
+            )
 
         elif self.state == "second_cross":
             # Второй крестик (900 мс)
@@ -116,14 +118,15 @@ class ReproductionTask:
             # Второй кружок для ответа
             center_x = self.screen_width // 2
             center_y = self.screen_height // 2
-            pygame.draw.circle(screen, self.circle_color, (center_x, center_y), self.circle_radius)
+            pygame.draw.circle(
+                screen, self.circle_color, (center_x, center_y), self.circle_radius
+            )
 
             # Инструкция для пользователя
             if not self.space_pressed:
                 font = pygame.font.Font(None, 36)
                 instruction = font.render(
-                    "Нажмите ПРОБЕЛ, когда пройдет столько же времени", 
-                    True, (0, 0, 0)
+                    "Нажмите ПРОБЕЛ, когда пройдет столько же времени", True, (0, 0, 0)
                 )
                 text_rect = instruction.get_rect(
                     center=(self.screen_width // 2, self.screen_height - 50)
@@ -138,12 +141,12 @@ class ReproductionTask:
             "reproduction_error": self.response_time - self.target_duration,
             "reproduction_error_abs": abs(self.response_time - self.target_duration),
             "reproduction_ratio": (
-                self.response_time / self.target_duration 
-                if self.target_duration > 0 else 0
+                self.response_time / self.target_duration
+                if self.target_duration > 0
+                else 0
             ),
         }
 
     def is_complete(self) -> bool:
         """Проверяет, завершена ли задача"""
         return self.space_pressed
-    

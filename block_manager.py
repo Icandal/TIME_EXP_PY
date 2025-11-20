@@ -28,10 +28,10 @@ class BlockManager:
             print(f"  '{category}': {count} траекторий")
         print(f"ОБЩЕЕ КОЛИЧЕСТВО ТРАЕКТОРИЙ: {total_trajectories}")
         print("=" * 50)
-        
+
         # Для последовательного выбора: отслеживаем текущий индекс для каждой категории
         self.category_counters: Dict[str, int] = {}
-        
+
         # Инициализируем счетчики для всех категорий
         for category in trajectories_data.keys():
             self.category_counters[category] = 0
@@ -42,11 +42,11 @@ class BlockManager:
         for block_index, block in enumerate(blocks):
             print(f"Обработка блока {block_index + 1}: '{block.name}'")
             print(f"  Запрошенная категория: '{block.trajectories_category}'")
-            
+
             # Генерируем последовательность попыток для блока
             # Теперь создаем попытки на основе всех доступных траекторий
             trial_sequence = self._generate_sequential_trial_sequence()
-            
+
             print(f"  Создано {len(trial_sequence)} попыток для блока")
 
             self.block_sequences.append(trial_sequence)
@@ -55,20 +55,21 @@ class BlockManager:
     def _generate_sequential_trial_sequence(self) -> List[Dict[str, Any]]:
         """Генерирует последовательность попыток на основе всех доступных траекторий"""
         trials = []
-        
+
         # Получаем все категории в отсортированном порядке
         available_categories = sorted(self.trajectories_data.keys())
-        
+
         for category in available_categories:
             # Для каждой категории создаем попытки для всех траекторий
             category_trajectories = self.trajectories_data[category]
-            
+
             for trajectory_idx in range(len(category_trajectories)):
                 # Декодируем параметры из названия категории
                 from exp_config import ExperimentConfig
+
                 config = ExperimentConfig()
                 decoded_params = config.decode_category(category)
-                
+
                 trial = {
                     "task_type": decoded_params["task_index"],
                     "speed": decoded_params["speed"],
@@ -79,10 +80,12 @@ class BlockManager:
                     "trial_in_block": len(trials) + 1,
                     "display_order": len(trials) + 1,
                 }
-                
+
                 trials.append(trial)
-                print(f"    Создана попытка: {category}[{trajectory_idx}] -> задача={decoded_params['task_index']}, скорость={decoded_params['speed']}, длительность={decoded_params['duration']}")
-        
+                print(
+                    f"    Создана попытка: {category}[{trajectory_idx}] -> задача={decoded_params['task_index']}, скорость={decoded_params['speed']}, длительность={decoded_params['duration']}"
+                )
+
         print(f"  Всего создано {len(trials)} попыток для всех категорий")
         return trials
 
@@ -95,9 +98,14 @@ class BlockManager:
 
     def get_current_trial(self) -> Dict[str, Any]:
         """Возвращает текущую попытку"""
-        if (self.current_block_index < len(self.block_sequences) and 
-            self.current_trial_index < len(self.block_sequences[self.current_block_index])):
-            return self.block_sequences[self.current_block_index][self.current_trial_index]
+        if self.current_block_index < len(
+            self.block_sequences
+        ) and self.current_trial_index < len(
+            self.block_sequences[self.current_block_index]
+        ):
+            return self.block_sequences[self.current_block_index][
+                self.current_trial_index
+            ]
         else:
             # Возвращаем пустой словарь как запасной вариант
             return {}
@@ -112,11 +120,11 @@ class BlockManager:
             # Блок завершен
             self.current_trial_index = 0
             self.current_block_index += 1
-            
+
             # Проверяем, не вышли ли за пределы списка блоков
             if self.current_block_index >= len(self.blocks):
                 return True  # Эксперимент завершен
-                
+
             return True  # Блок завершен, но эксперимент продолжается
         return False
 
@@ -146,7 +154,7 @@ class BlockManager:
 
         current_block = self.get_current_block()
         current_trial = self.get_current_trial()
-        
+
         if not current_block or not current_trial:
             return {
                 "block_number": 0,
@@ -186,9 +194,11 @@ class BlockManager:
 
     def get_used_trajectories_info(self) -> Dict[str, Any]:
         """Возвращает информацию об использованных траекториях (для отладки)"""
-        total_trajectories = sum(len(trajectories) for trajectories in self.trajectories_data.values())
+        total_trajectories = sum(
+            len(trajectories) for trajectories in self.trajectories_data.values()
+        )
         used_trajectories = sum(self.category_counters.values())
-        
+
         return {
             "category_counters": self.category_counters,
             "total_categories": len(self.trajectories_data),

@@ -15,7 +15,7 @@ from block_manager import BlockManager
 
 class FixationPreviewScreen:
     """Экран предварительного показа фиксационной точки перед траекторией"""
-    
+
     def __init__(self, screen_width: int, screen_height: int, fixation_size: int = 15):
         self.screen_width = screen_width
         self.screen_height = screen_height
@@ -24,13 +24,13 @@ class FixationPreviewScreen:
         self.start_time = 0
         self.duration = 900  # 900 мс
         self.background_color = (255, 255, 255)
-        
+
         # Создаем фиксационную точку (будет установлена форма позже)
         self.fixation_preview = FixationCross(
             screen_width, screen_height, FixationShape.TRIANGLE, fixation_size
         )
         self.fixation_preview.set_color((0, 0, 0))
-    
+
     def activate(self, fixation_shape: FixationShape) -> None:
         """Активирует экран предпоказа фиксационной точки"""
         self.is_active = True
@@ -38,31 +38,31 @@ class FixationPreviewScreen:
         # Устанавливаем форму фиксационной точки
         self.fixation_preview.set_shape(fixation_shape)
         print(f"Активирован экран предпоказа {fixation_shape.value} (900 мс)")
-    
+
     def deactivate(self) -> None:
         """Деактивирует экран"""
         self.is_active = False
-    
+
     def update(self) -> bool:
         """Обновляет состояние и возвращает True если время истекло"""
         if not self.is_active:
             return False
-        
+
         current_time = pygame.time.get_ticks()
         if current_time - self.start_time >= self.duration:
             self.deactivate()
             print(f"Экран предпоказа {self.fixation_preview.shape.value} завершен")
             return True
         return False
-    
+
     def draw(self, screen: pygame.Surface) -> None:
         """Рисует экран с фиксационной точкой"""
         if not self.is_active:
             return
-        
+
         # Белый фон
         screen.fill(self.background_color)
-        
+
         # Рисуем фиксационную точку в центре
         self.fixation_preview.draw(screen)
 
@@ -250,7 +250,11 @@ class ScreenManager:
         exp = self.experiment
 
         # Если активна специальная задача - НЕ рисуем основной интерфейс
-        if exp.reproduction_task.is_active or exp.timing_screen.is_active or exp.fixation_preview_screen.is_active:
+        if (
+            exp.reproduction_task.is_active
+            or exp.timing_screen.is_active
+            or exp.fixation_preview_screen.is_active
+        ):
             return
 
         # Рисуем фиксационную точку
@@ -276,7 +280,7 @@ class Experiment:
         self.setup_components()
         self.key_handler = KeyHandler(self)
         self.screen_manager = ScreenManager(self)
-        
+
         # Объявляем переменные
         self.current_block = None
         self.current_trial: Dict[str, Any] = {}
@@ -340,7 +344,7 @@ class Experiment:
 
         # Создаем задачу воспроизведения
         self.reproduction_task = ReproductionTask(self.screen_width, self.screen_height)
-        
+
         # Создаем экран предпоказа фиксационной точки
         self.fixation_preview_screen = FixationPreviewScreen(
             self.screen_width, self.screen_height, self.config.fixation_size
@@ -368,7 +372,9 @@ class Experiment:
         # Состояние фотосенсора: active, passive, occlusion
         self.photo_sensor_state = "active"
 
-        print(f"Фото-сенсор: позиция ({self.photo_sensor_position[0]}, {self.photo_sensor_position[1]})")
+        print(
+            f"Фото-сенсор: позиция ({self.photo_sensor_position[0]}, {self.photo_sensor_position[1]})"
+        )
 
         # Скрытый переключатель для минималистичного режима
         self.minimal_mode = True
@@ -395,7 +401,7 @@ class Experiment:
                 "block_name": "Эксперимент завершен",
                 "task_type": 0,
                 "trajectory_category": "none",
-                "actual_trajectory_category": "none", 
+                "actual_trajectory_category": "none",
                 "trajectory_index": 0,
                 "speed": None,
                 "duration": None,
@@ -413,7 +419,7 @@ class Experiment:
             if self.current_block is None:
                 print("Ошибка: текущий блок не определен")
                 return
-                
+
             actual_category = self.current_trial.get(
                 "actual_trajectory_category", self.current_block.trajectories_category
             )
@@ -428,13 +434,17 @@ class Experiment:
         """Расчет параметров траектории (только для задач с траекторией)"""
         # ИСПРАВЛЕНИЕ: Используем декодированные параметры для получения правильной скорости
         decoded_params = self.current_trial.get("decoded_params", {})
-        
+
         self.assigned_speed = (
-            decoded_params.get("speed")  # Используем скорость из декодированных параметров
+            decoded_params.get(
+                "speed"
+            )  # Используем скорость из декодированных параметров
             if decoded_params.get("speed") is not None
-            else self.current_trial["speed"]  # Резервный вариант
-            if self.current_trial["speed"] is not None
-            else self.config.available_speeds[0]
+            else (
+                self.current_trial["speed"]  # Резервный вариант
+                if self.current_trial["speed"] is not None
+                else self.config.available_speeds[0]
+            )
         )
 
         self.calculated_duration = 0.0
@@ -455,11 +465,11 @@ class Experiment:
             print(f"=== CREATE MOVING POINT ===")
             print(f"  assigned_speed: {self.assigned_speed} px/кадр")
             print(f"  type: {type(self.assigned_speed)}")
-            
+
             # ПРОВЕРКА: убедимся, что assigned_speed правильный
-            if hasattr(self, 'current_trial') and self.current_trial:
+            if hasattr(self, "current_trial") and self.current_trial:
                 print(f"  Скорость из current_trial: {self.current_trial.get('speed')}")
-            
+
             self.moving_point = MovingPoint(
                 self.trajectory_manager.current_trajectory,
                 speed=self.assigned_speed,  # Используем обновленное значение
@@ -469,17 +479,19 @@ class Experiment:
                     else "none"
                 ),
                 occlusion_range=self.current_task.occlusion_range,
-                occlusion_delay=500
+                occlusion_delay=500,
             )
-            
+
             # ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: убедимся, что скорость установлена правильно
             print(f"  Скорость в созданной точке: {self.moving_point.speed} px/кадр")
             print(f"  Тип скорости в точке: {type(self.moving_point.speed)}")
-                
+
             if not self.current_task.occlusion_enabled:
                 self.moving_point.disable_occlusion()
         else:
-            print("Ошибка: Не удалось создать движущуюся точку - траектория не загружена")
+            print(
+                "Ошибка: Не удалось создать движущуюся точку - траектория не загружена"
+            )
             sys.exit()
 
     def setup_screens(self):
@@ -491,7 +503,7 @@ class Experiment:
         self.initial_instruction_screen = InstructionScreen(
             self.screen_width, self.screen_height
         )
-        
+
         # Адаптивное содержимое для начальной инструкции
         instruction_lines = [
             "ЭКСПЕРИМЕНТ ПО ВОСПРИЯТИЮ ВРЕМЕНИ",
@@ -500,7 +512,7 @@ class Experiment:
             "",
             "Типы задач:",
             "1. Окклюзия: точка скрывается на части траектории",
-            "2. Оценка времени: остановите точку и оцените время движения", 
+            "2. Оценка времени: остановите точку и оцените время движения",
             "3. Воспроизведение: запомните и воспроизведите время",
             "",
             "Управление:",
@@ -509,14 +521,13 @@ class Experiment:
             "",
             "Нажмите ПРОБЕЛ чтобы начать эксперимент",
         ]
-        
+
         self.initial_instruction_screen.set_custom_content(
-            title=instruction_lines[0],
-            instructions=instruction_lines[1:]
+            title=instruction_lines[0], instructions=instruction_lines[1:]
         )
         self.initial_instruction_screen.activate()
 
-        self.timing_screen = TimingEstimationScreen( 
+        self.timing_screen = TimingEstimationScreen(
             self.screen_width, self.screen_height
         )
 
@@ -528,7 +539,7 @@ class Experiment:
         trajectory = self.trajectory_manager.current_trajectory
         total_length = trajectory.total_length
         speed_px_per_frame = self.assigned_speed
-        
+
         # ТОЧНЫЙ расчет
         frames_required = total_length / speed_px_per_frame
         reference_response_time = frames_required * (1000 / 60)
@@ -543,10 +554,10 @@ class Experiment:
         time_method1 = reference_response_time
         time_method2 = (total_length / (speed_px_per_frame * 60)) * 1000  # через px/сек
         time_method3 = trajectory.calculate_duration(speed_px_per_frame)
-        
+
         print(f"  Проверка расчетов:")
         print(f"    Метод 1 (кадры): {time_method1:.0f} мс")
-        print(f"    Метод 2 (px/сек): {time_method2:.0f} мс") 
+        print(f"    Метод 2 (px/сек): {time_method2:.0f} мс")
         print(f"    Метод 3 (trajectory): {time_method3:.0f} мс")
 
         stimulus_presentation_time = 0.0
@@ -564,10 +575,10 @@ class Experiment:
         if self.current_block is None:
             print("Ошибка: нет активного блока")
             return
-            
+
         # Используем декодированные параметры для определения типа условия
         decoded_params = self.current_trial.get("decoded_params", {})
-        
+
         # Определяем тип условия на основе декодированной задачи
         if decoded_params.get("task_index") == 2:  # C3 - воспроизведение времени
             condition_type = "reproduction"
@@ -589,15 +600,19 @@ class Experiment:
         # Записываем данные о попытке
         self.data_collector.start_new_trial(
             trajectory_type=(
-                self.current_block.trajectories_category 
-                if self.current_task.has_trajectory 
+                self.current_block.trajectories_category
+                if self.current_task.has_trajectory
                 else "none"
             ),
-            duration=self.calculated_duration if self.current_task.has_trajectory else 0,
-            speed=self.assigned_speed if self.current_task.has_trajectory else 0,  # Используем assigned_speed
+            duration=(
+                self.calculated_duration if self.current_task.has_trajectory else 0
+            ),
+            speed=(
+                self.assigned_speed if self.current_task.has_trajectory else 0
+            ),  # Используем assigned_speed
             trajectory_number=(
-                self.current_trial["trajectory_index"] 
-                if self.current_task.has_trajectory 
+                self.current_trial["trajectory_index"]
+                if self.current_task.has_trajectory
                 else 0
             ),
             condition_type=condition_type,
@@ -619,23 +634,29 @@ class Experiment:
                 if self.current_trial["duration"] is not None
                 else self.config.available_durations[0]
             )
-            print(f"Непосредственный запуск задачи воспроизведения с длительностью {assigned_duration}мс")
+            print(
+                f"Непосредственный запуск задачи воспроизведения с длительностью {assigned_duration}мс"
+            )
             self.reproduction_task.activate(assigned_duration)
-        
+
         # ДЛЯ ВСЕХ ЗАДАЧ С ТРАЕКТОРИЕЙ: активируем предпоказ фиксационной точки
         elif self.current_task.has_trajectory:
             self.fixation_preview_screen.activate(self.current_task.fixation_shape)
-            print(f"Активирован предпоказ {self.current_task.fixation_shape.value} перед траекторией")
+            print(
+                f"Активирован предпоказ {self.current_task.fixation_shape.value} перед траекторией"
+            )
 
     def print_current_trial_info(self):
         """Вывод информации о текущей попытке"""
-        block_name = self.current_block.name if self.current_block else 'N/A'
-        trajectory_category = self.current_block.trajectories_category if self.current_block else 'N/A'
-        
+        block_name = self.current_block.name if self.current_block else "N/A"
+        trajectory_category = (
+            self.current_block.trajectories_category if self.current_block else "N/A"
+        )
+
         # Получаем декодированные параметры
         decoded_params = self.current_trial.get("decoded_params", {})
         decoded_category = decoded_params.get("decoded_category", "N/A")
-        
+
         info_lines = [
             f"=== Блок {self.progress_info['block_number']}/{self.progress_info['total_blocks']}: {block_name} ===",
             f"=== {self.current_task.name} ===",
@@ -647,41 +668,49 @@ class Experiment:
 
         if self.current_task.has_trajectory:
             trajectory_info = self.trajectory_manager.get_current_trajectory_info()
-            info_lines.extend([
-                f"Загружена траектория {trajectory_category}[{self.current_trial['trajectory_index']}]",
-                f"Длина траектории: {trajectory_info.get('total_length', 0):.1f} пикселей",
-                f"Расчетная продолжительность: {self.calculated_duration:.0f} мс",
-                f"Назначенная скорость: {self.assigned_speed} px/кадр",
-                f"Окклюзия: {'ВКЛ' if self.current_task.occlusion_enabled else 'ВЫКЛ'}",
-            ])
-            
+            info_lines.extend(
+                [
+                    f"Загружена траектория {trajectory_category}[{self.current_trial['trajectory_index']}]",
+                    f"Длина траектории: {trajectory_info.get('total_length', 0):.1f} пикселей",
+                    f"Расчетная продолжительность: {self.calculated_duration:.0f} мс",
+                    f"Назначенная скорость: {self.assigned_speed} px/кадр",
+                    f"Окклюзия: {'ВКЛ' if self.current_task.occlusion_enabled else 'ВЫКЛ'}",
+                ]
+            )
+
             if self.current_task.occlusion_enabled:
                 info_lines.append(f"Тип окклюзии: {self.current_task.occlusion_type}")
                 if self.current_task.occlusion_type == "timed":
-                    info_lines.append("Окклюзия по времени: через 500мс после начала движения")
+                    info_lines.append(
+                        "Окклюзия по времени: через 500мс после начала движения"
+                    )
                 elif self.current_task.occlusion_range:
-                    info_lines.append(f"Диапазон окклюзии: [{self.current_task.occlusion_range[0]:.1f}, {self.current_task.occlusion_range[1]:.1f}]")
+                    info_lines.append(
+                        f"Диапазон окклюзии: [{self.current_task.occlusion_range[0]:.1f}, {self.current_task.occlusion_range[1]:.1f}]"
+                    )
 
         if self.current_task.timing_estimation:
             info_lines.append("Оценка времени после остановки: ДА")
-            
+
         if self.current_task.reproduction_task:
-            info_lines.extend([
-                "Воспроизведение времени: ДА",
-                f"Назначенная длительность: {self.current_trial['duration']} мс"
-            ])
+            info_lines.extend(
+                [
+                    "Воспроизведение времени: ДА",
+                    f"Назначенная длительность: {self.current_trial['duration']} мс",
+                ]
+            )
 
         print("\n".join(info_lines))
 
     def handle_instruction_continue(self):
         """Обработка продолжения после инструкции"""
         self.state.waiting_for_instruction = False
-        
+
         # Определяем, завершена ли попытка нормально
         completed_normally = True
         if self.current_task.has_trajectory and self.moving_point is not None:
             completed_normally = not self.moving_point.stopped_by_user
-            
+
         self.data_collector.complete_trial(completed_normally=completed_normally)
 
         block_completed = self.block_manager.move_to_next_trial()
@@ -702,7 +731,7 @@ class Experiment:
         """Обработка завершения блока"""
         # Сохраняем данные текущего блока
         self.save_current_data()
-        
+
         # Создаем новый сборщик данных для нового блока
         self.update_progress_info()
         self.data_collector = DataCollector(
@@ -712,27 +741,31 @@ class Experiment:
     def setup_next_trial(self):
         """Настройка следующей попытки"""
         self.update_progress_info()
-        
+
         # Проверяем, не завершен ли эксперимент
         if self.block_manager.is_experiment_complete():
             print("Эксперимент завершен, нет следующих попыток")
             return
-            
+
         # Используем декодированные параметры из категории траектории
         decoded_params = self.current_trial.get("decoded_params", {})
         if decoded_params:
             # Переопределяем тип задачи и параметры на основе декодированной категории
-            task_type = decoded_params.get("task_index", self.current_trial["task_type"])
+            task_type = decoded_params.get(
+                "task_index", self.current_trial["task_type"]
+            )
             speed = decoded_params.get("speed")
             duration = decoded_params.get("duration")
-            
+
             # ОБНОВЛЯЕМ параметры в текущем испытании
             self.current_trial["task_type"] = task_type
             self.current_trial["speed"] = speed
             self.current_trial["duration"] = duration
-            
-            print(f"Применены параметры из категории: задача={task_type}, скорость={speed}, длительность={duration}")
-        
+
+            print(
+                f"Применены параметры из категории: задача={task_type}, скорость={speed}, длительность={duration}"
+            )
+
         self.current_task = self.config.get_current_task_config(
             self.current_trial["task_type"]
         )
@@ -740,13 +773,17 @@ class Experiment:
         # ОБНОВЛЯЕМ назначенную скорость на основе декодированных параметров
         decoded_params = self.current_trial.get("decoded_params", {})
         self.assigned_speed = (
-            decoded_params.get("speed")  # Используем скорость из декодированных параметров
+            decoded_params.get(
+                "speed"
+            )  # Используем скорость из декодированных параметров
             if decoded_params.get("speed") is not None
-            else self.current_trial["speed"]  # Резервный вариант
-            if self.current_trial["speed"] is not None
-            else self.config.available_speeds[0]
+            else (
+                self.current_trial["speed"]  # Резервный вариант
+                if self.current_trial["speed"] is not None
+                else self.config.available_speeds[0]
+            )
         )
-        
+
         print(f"ФИНАЛЬНАЯ СКОРОСТЬ ДЛЯ ТОЧКИ: {self.assigned_speed} px/кадр")
 
         # Сбрасываем состояние фотосенсора при начале новой попытки
@@ -767,15 +804,21 @@ class Experiment:
                     self.moving_point.reset(self.trajectory_manager.current_trajectory)
                     # Явно обновляем скорость после reset
                     print(f"=== ЯВНОЕ ОБНОВЛЕНИЕ СКОРОСТИ ===")
-                    print(f"  Скорость до обновления: {self.moving_point.speed} px/кадр")
+                    print(
+                        f"  Скорость до обновления: {self.moving_point.speed} px/кадр"
+                    )
                     print(f"  Новая скорость: {self.assigned_speed} px/кадр")
                     self.moving_point.speed = self.assigned_speed
-                    print(f"  Скорость после обновления: {self.moving_point.speed} px/кадр")
-                    
+                    print(
+                        f"  Скорость после обновления: {self.moving_point.speed} px/кадр"
+                    )
+
                 # Проверяем, что moving_point не None перед вызовом методов
                 if self.moving_point is not None:
                     if self.current_task.occlusion_enabled:
-                        self.moving_point.set_occlusion_type(self.current_task.occlusion_type)
+                        self.moving_point.set_occlusion_type(
+                            self.current_task.occlusion_type
+                        )
                         self.moving_point.occlusion_enabled = True
                     else:
                         self.moving_point.disable_occlusion()
@@ -799,7 +842,7 @@ class Experiment:
         """Остановка движущейся точки пользователем (только для задач с траекторией)"""
         if self.moving_point is None:
             return
-            
+
         self.moving_point.stop_by_user()
         self.space_press_time = pygame.time.get_ticks()
 
@@ -824,7 +867,9 @@ class Experiment:
         if self.current_task.timing_estimation:
             self.state.timing_delay_timer = pygame.time.get_ticks()
             self.state.waiting_for_timing_delay = True
-            print(f"Установлена задержка 900 мс перед оценкой времени. Фактическое время движения: {actual_duration}мс")
+            print(
+                f"Установлена задержка 900 мс перед оценкой времени. Фактическое время движения: {actual_duration}мс"
+            )
         else:
             # Для обычных задач: показываем инструкцию после задержки
             self.state.instruction_delay_timer = pygame.time.get_ticks()
@@ -835,13 +880,15 @@ class Experiment:
 
     def handle_timing_after_stop(self, actual_duration: float):
         """Обработка оценки времени после остановки точки пользователем"""
-        print(f"Запуск оценки времени после остановки! Фактическое время: {actual_duration}мс")
+        print(
+            f"Запуск оценки времени после остановки! Фактическое время: {actual_duration}мс"
+        )
         self.timing_screen.activate(actual_duration)
 
     def show_help_info(self):
         """Показать информацию о управлении"""
-        block_name = self.current_block.name if self.current_block else 'N/A'
-        
+        block_name = self.current_block.name if self.current_block else "N/A"
+
         help_info = [
             "=== Управление ===",
             "ПРОБЕЛ: Остановить точку / продолжить",
@@ -864,10 +911,14 @@ class Experiment:
                 self.progress_info["block_number"],
                 self.data_collector.get_all_data(),
             )
-            print(f"Данные блока {self.progress_info['block_number']} сохранены в файл: {filename}")
+            print(
+                f"Данные блока {self.progress_info['block_number']} сохранены в файл: {filename}"
+            )
             return filename
         else:
-            print(f"Нет данных для сохранения в блоке {self.progress_info['block_number']}")
+            print(
+                f"Нет данных для сохранения в блоке {self.progress_info['block_number']}"
+            )
             return ""
 
     def draw_indicator(self):
@@ -903,8 +954,8 @@ class Experiment:
 
         font = pygame.font.Font(None, 24)
 
-        block_name = self.current_block.name if self.current_block else 'N/A'
-        
+        block_name = self.current_block.name if self.current_block else "N/A"
+
         info_texts = [
             f"Задача: {self.current_task.name}",
             f"Блок: {self.progress_info['block_number']}/{self.progress_info['total_blocks']} - {block_name}",
@@ -939,7 +990,9 @@ class Experiment:
                 self.timing_screen.deactivate()
                 self.data_collector.complete_trial(completed_normally=True)
                 self.instruction_screen.activate()
-                print(f"Оценка времени завершена! Фактическое: {timing_results['actual_duration']}мс, Оцененное: {timing_results['estimated_duration']}мс")
+                print(
+                    f"Оценка времени завершена! Фактическое: {timing_results['actual_duration']}мс, Оцененное: {timing_results['estimated_duration']}мс"
+                )
                 return True
 
         # Обработка задачи воспроизведения
@@ -950,7 +1003,9 @@ class Experiment:
                 self.reproduction_task.deactivate()
                 self.data_collector.complete_trial(completed_normally=True)
                 self.instruction_screen.activate()
-                print(f"Воспроизведение завершено! Целевое: {reproduction_results['target_duration']}мс, Воспроизведенное: {reproduction_results['reproduced_duration']}мс")
+                print(
+                    f"Воспроизведение завершено! Целевое: {reproduction_results['target_duration']}мс, Воспроизведенное: {reproduction_results['reproduced_duration']}мс"
+                )
                 return True
 
         return False
@@ -962,10 +1017,13 @@ class Experiment:
 
         if self.moving_point is not None:
             # Запускаем отсчет времени при первом обновлении
-            if self.moving_point.movement_start_time is None and self.moving_point.is_moving:
+            if (
+                self.moving_point.movement_start_time is None
+                and self.moving_point.is_moving
+            ):
                 self.moving_point.start_movement()
                 print("Отсчет времени для окклюзии запущен")
-            
+
             self.moving_point.update(dt)
             current_time = pygame.time.get_ticks()
 
@@ -1018,7 +1076,7 @@ class Experiment:
         """Обработка завершения траектории"""
         actual_duration = current_time - self.start_time
         self.data_collector.record_movement_end()
-        
+
         # Сбрасываем состояние фотосенсора при завершении траектории
         if self.photo_sensor_state == "occlusion":
             self.photo_sensor_state = "active"
@@ -1071,7 +1129,7 @@ class Experiment:
                     self.state.timing_delay_timer
                     - self.data_collector.current_trial_data["movement_start_time"]
                 )
-            
+
             self.state.waiting_for_timing_delay = False
             self.handle_timing_after_stop(actual_duration)
             print("Задержка завершена, запуск экрана оценки времени...")
@@ -1110,13 +1168,17 @@ class Experiment:
                 pass
             elif self.fixation_preview_screen.is_active:  # Сначала фиксационная точка
                 self.check_fixation_preview(current_time)
-            elif self.current_task.has_trajectory and not self.timing_screen.is_active and not self.instruction_screen.is_active:
+            elif (
+                self.current_task.has_trajectory
+                and not self.timing_screen.is_active
+                and not self.instruction_screen.is_active
+            ):
                 # Только после фиксационной точки начинаем движение
                 self.update_moving_point(dt)
 
             # Проверка задержки инструкции
             self.check_instruction_delay(current_time)
-            
+
             # Проверка задержки перед оценкой времени
             self.check_timing_delay(current_time)
 
@@ -1156,6 +1218,7 @@ class Experiment:
         pygame.mouse.set_visible(True)
         pygame.quit()
         sys.exit()
+
 
 def main() -> None:
     """Основная функция"""

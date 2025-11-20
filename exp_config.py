@@ -57,7 +57,7 @@ class BlockConfig:
         self.trajectories_category = trajectories_category
 
     def generate_trial_sequence(
-    self, available_speeds: List[float], available_durations: List[int]
+        self, available_speeds: List[float], available_durations: List[int]
     ) -> List[Dict[str, Any]]:
         """Генерирует последовательность попыток для блока"""
         # Если распределение задач пустое, вернем пустой список
@@ -90,8 +90,8 @@ class ExperimentConfig:
         self.tasks: List[TaskConfig] = [
             # C1 - задачи с окклюдером
             TaskConfig(
-                "C1: Окклюзия по времени", 
-                FixationShape.TRIANGLE, 
+                "C1: Окклюзия по времени",
+                FixationShape.TRIANGLE,
                 has_trajectory=True,
                 occlusion_enabled=True,
                 occlusion_type="timed",
@@ -101,7 +101,7 @@ class ExperimentConfig:
             ),
             # C2 - остановка и воспроизведение движения
             TaskConfig(
-                "C2: Оценка времени после остановки", 
+                "C2: Оценка времени после остановки",
                 FixationShape.STAR,
                 has_trajectory=True,
                 occlusion_enabled=False,
@@ -131,12 +131,12 @@ class ExperimentConfig:
         """Декодирует категорию траектории в параметры задачи"""
         if len(category) != 6:  # Формат: C1S1D1
             return self._get_default_parameters()
-        
+
         try:
             task_type = category[1]  # C1 -> "1"
-            speed_type = category[3]  # S1 -> "1" 
+            speed_type = category[3]  # S1 -> "1"
             duration_type = category[5]  # D1 -> "1"
-            
+
             # Определяем тип задачи
             if task_type == "1":
                 task_index = 0  # C1 - окклюзия
@@ -146,7 +146,7 @@ class ExperimentConfig:
                 task_index = 2  # C3 - воспроизведение времени
             else:
                 task_index = 0  # По умолчанию
-            
+
             # Определяем скорость
             if speed_type == "1":
                 speed = 8.99  # S1 - медленная скорость
@@ -154,7 +154,7 @@ class ExperimentConfig:
                 speed = 18.00  # S2 - быстрая скорость
             else:
                 speed = 8.99  # По умолчанию
-            
+
             # Определяем длительность (для C3 задач)
             if duration_type == "1":
                 duration = 500
@@ -164,14 +164,14 @@ class ExperimentConfig:
                 duration = 2900
             else:
                 duration = 500  # По умолчанию
-            
+
             return {
                 "task_index": task_index,
                 "speed": speed,
                 "duration": duration,
-                "decoded_category": f"C{task_type}S{speed_type}D{duration_type}"
+                "decoded_category": f"C{task_type}S{speed_type}D{duration_type}",
             }
-            
+
         except (IndexError, ValueError):
             return self._get_default_parameters()
 
@@ -181,7 +181,7 @@ class ExperimentConfig:
             "task_index": 0,
             "speed": 8.99,
             "duration": 500,
-            "decoded_category": "C1S1D1"
+            "decoded_category": "C1S1D1",
         }
 
     def get_current_task_config(self, task_index: int) -> TaskConfig:
@@ -373,6 +373,8 @@ class ExperimentConfig:
                 tasks_distribution=block_data.get(
                     "tasks_distribution", {0: 1, 1: 1, 2: 1}
                 ),
-                trajectories_category=block_data.get("trajectories_category", "sequential"),
+                trajectories_category=block_data.get(
+                    "trajectories_category", "sequential"
+                ),
             )
             self.blocks.append(block)
