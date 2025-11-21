@@ -235,7 +235,8 @@ class MovingPoint:
             self.current_position[1] + dy * self.speed
         )
         
-        # Обновляем видимость (точка всегда видима за пределами траектории)
+        # ОБНОВЛЯЕМ ВИДИМОСТЬ ДАЖЕ ЗА ПРЕДЕЛАМИ ТРАЕКТОРИИ
+        # Для timed окклюзии видимость определяется временем, для других - точка всегда видима
         self._update_visibility()
 
     def _update_visibility(self) -> None:
@@ -245,14 +246,8 @@ class MovingPoint:
             self.occlusion_active = False
             return
 
-        # ЕСЛИ ТОЧКА ВЫШЛА ЗА ПРЕДЕЛЫ ТРАЕКТОРИИ - ОНА ВСЕГДА ВИДИМА
-        if self.beyond_trajectory:
-            self.is_visible = True
-            self.occlusion_active = False
-            return
-
         if self.occlusion_type == "timed":
-            # ЛОГИКА ВРЕМЕННОЙ ОККЛЮЗИИ
+            # ЛОГИКА ВРЕМЕННОЙ ОККЛЮЗИИ - РАБОТАЕТ ДАЖЕ ЗА ПРЕДЕЛАМИ ТРАЕКТОРИИ
             if self.movement_start_time is None:
                 self.is_visible = True
                 self.occlusion_active = False
@@ -268,7 +263,7 @@ class MovingPoint:
                 self.is_visible = False
                 print(f"Окклюзия началась! Прошло {elapsed_time}мс")
 
-            # Если окклюзия уже началась - точка остается невидимой до конца движения
+            # Если окклюзия уже началась - точка остается невидимой ДАЖЕ ЗА ПРЕДЕЛАМИ ТРАЕКТОРИИ
             elif self.occlusion_started:
                 self.occlusion_active = True
                 self.is_visible = False
@@ -280,6 +275,12 @@ class MovingPoint:
 
         else:
             # существующая логика для других типов окклюзии
+            # ЕСЛИ ТОЧКА ВЫШЛА ЗА ПРЕДЕЛЫ ТРАЕКТОРИИ - ОНА ВСЕГДА ВИДИМА (только для НЕ timed окклюзии)
+            if self.beyond_trajectory and self.occlusion_type != "timed":
+                self.is_visible = True
+                self.occlusion_active = False
+                return
+
             current_pos = (self.current_segment, self.progress)
             occlusion_start = (
                 self.occlusion_start_segment,
@@ -331,13 +332,18 @@ class MovingPoint:
         self.is_moving = False
         self.is_finished = True
         self.finished_timer = pygame.time.get_ticks()
-        # Устанавливаем позицию на последней точке
+        # Устанавливаем позицию на последней точке (только если не вышли за пределы)
         if not self.beyond_trajectory and self.trajectory.points:
             self.current_position = self.trajectory.points[-1]
-        # Гарантируем, что точка видима в конце
-        self.is_visible = True
-        self.occlusion_active = False
-        print("Движение завершено, точка снова видима")
+        
+        # Гарантируем, что точка видима в конце ТОЛЬКО ЕСЛИ НЕ БЫЛА В ОККЛЮЗИИ
+        # Для timed окклюзии - точка становится видимой только если окклюзия не активна
+        if not self.occlusion_active:
+            self.is_visible = True
+            self.occlusion_active = False
+            print("Движение завершено, точка снова видима")
+        else:
+            print("Движение завершено, точка остается невидимой (была в окклюзии)")
 
     def stop_by_user(self) -> None:
         """Останавливает точку по команде пользователя"""
@@ -348,6 +354,7 @@ class MovingPoint:
             self.stopped_by_user = True
 
             # ВАЖНОЕ ИЗМЕНЕНИЕ: если точка была в окклюзии при остановке, она остается невидимой
+            # ДАЖЕ ЕСЛИ ОНА ВЫШЛА ЗА ПРЕДЕЛЫ ТРАЕКТОРИИ
             if self.occlusion_active:
                 # Точка остановлена во время окклюзии - остается невидимой
                 self.is_visible = False
