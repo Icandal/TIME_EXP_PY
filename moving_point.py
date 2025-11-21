@@ -22,6 +22,7 @@ class MovingPoint:
         self.finished_timer = 0
         self.finished_delay = 900  # мс
         self.stopped_by_user = False
+        self.beyond_trajectory = False  # НОВЫЙ ФЛАГ: точка вышла за пределы траектории
 
         # Настройки скрытия точки
         self.occlusion_enabled = True
@@ -161,8 +162,17 @@ class MovingPoint:
             return
 
         points = self.trajectory.points
+        
+        # ЕСЛИ ТОЧКА ВЫШЛА ЗА ПРЕДЕЛЫ ТРАЕКТОРИИ - ПРОДОЛЖАЕМ ДВИЖЕНИЕ ПО ПРЯМОЙ
+        if self.beyond_trajectory:
+            self._continue_beyond_trajectory()
+            return
+            
         if self.current_segment >= len(points) - 1:
-            self.finish_movement()
+            # ТОЧКА ДОСТИГЛА КОНЦА ТРАЕКТОРИИ - ПРОДОЛЖАЕМ ДВИЖЕНИЕ ПО ПРЯМОЙ
+            self.beyond_trajectory = True
+            print("Точка достигла конца траектории, продолжаем движение по прямой")
+            self._continue_beyond_trajectory()
             return
 
         # Обновляем видимость
@@ -185,7 +195,10 @@ class MovingPoint:
             self.progress = 0.0
 
             if self.current_segment >= len(points) - 1:
-                self.finish_movement()
+                # СЛЕДУЮЩИЙ СЕГМЕНТ - ПОСЛЕДНИЙ, ПОДГОТАВЛИВАЕМСЯ К ВЫХОДУ ЗА ПРЕДЕЛЫ
+                self.beyond_trajectory = True
+                print("Точка достигла конца траектории, продолжаем движение по прямой")
+                self._continue_beyond_trajectory()
                 return
 
             # Обновляем точки для нового сегмента
@@ -197,9 +210,43 @@ class MovingPoint:
             start_point, end_point, self.progress
         )
 
+    def _continue_beyond_trajectory(self) -> None:
+        """Продолжает движение точки за пределы траектории по прямой"""
+        if len(self.trajectory.points) < 2:
+            return
+            
+        # Берем последний сегмент траектории для определения направления
+        last_point = self.trajectory.points[-1]
+        second_last_point = self.trajectory.points[-2]
+        
+        # Вычисляем направление движения
+        dx = last_point[0] - second_last_point[0]
+        dy = last_point[1] - second_last_point[1]
+        
+        # Нормализуем направление (делаем вектор единичной длины)
+        length = (dx**2 + dy**2)**0.5
+        if length > 0:
+            dx /= length
+            dy /= length
+        
+        # Продолжаем движение в том же направлении
+        self.current_position = (
+            self.current_position[0] + dx * self.speed,
+            self.current_position[1] + dy * self.speed
+        )
+        
+        # Обновляем видимость (точка всегда видима за пределами траектории)
+        self._update_visibility()
+
     def _update_visibility(self) -> None:
         """Обновляет видимость точки на основе времени движения"""
         if not self.occlusion_enabled:
+            self.is_visible = True
+            self.occlusion_active = False
+            return
+
+        # ЕСЛИ ТОЧКА ВЫШЛА ЗА ПРЕДЕЛЫ ТРАЕКТОРИИ - ОНА ВСЕГДА ВИДИМА
+        if self.beyond_trajectory:
             self.is_visible = True
             self.occlusion_active = False
             return
@@ -285,7 +332,8 @@ class MovingPoint:
         self.is_finished = True
         self.finished_timer = pygame.time.get_ticks()
         # Устанавливаем позицию на последней точке
-        self.current_position = self.trajectory.points[-1]
+        if not self.beyond_trajectory and self.trajectory.points:
+            self.current_position = self.trajectory.points[-1]
         # Гарантируем, что точка видима в конце
         self.is_visible = True
         self.occlusion_active = False
@@ -369,6 +417,7 @@ class MovingPoint:
         self.is_finished = False
         self.finished_timer = 0
         self.stopped_by_user = False
+        self.beyond_trajectory = False  # СБРАСЫВАЕМ ФЛАГ
 
         # Сбрасываем временные параметры
         self.movement_start_time = None
@@ -395,4 +444,5 @@ class MovingPoint:
             "occlusion_started": self.occlusion_started,
             "occlusion_active": self.occlusion_active,
             "is_visible": self.is_visible,
+            "beyond_trajectory": self.beyond_trajectory,  # ДОБАВЛЯЕМ НОВЫЙ ФЛАГ
         }
