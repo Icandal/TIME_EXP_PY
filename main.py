@@ -77,15 +77,15 @@ class ExperimentState:
 
     def __init__(self) -> None:
         self.waiting_for_initial_start = True
-        self.waiting_for_instruction = False
-        self.waiting_for_timing_delay = False
+        self.waiting_for_instruction = False  # Теперь не используется
+        self.waiting_for_timing_delay = False  # УДАЛЕНО - больше не используется
         self.movement_started = False
         self.occlusion_started = False
         self.running = True
-        self.instruction_delay_timer = 0
-        self.timing_delay_timer = 0
-        self.INSTRUCTION_DELAY = 900
-        self.TIMING_DELAY = 900
+        self.instruction_delay_timer = 0  # Теперь не используется
+        self.timing_delay_timer = 0  # УДАЛЕНО - больше не используется
+        self.INSTRUCTION_DELAY = 900  # Теперь не используется
+        self.TIMING_DELAY = 900  # УДАЛЕНО - больше не используется
 
 
 class KeyHandler:
@@ -301,6 +301,18 @@ class Experiment:
         self.pending_timing_duration = 0
         self.cross_start_time = 0
         self.timing_cross = None
+
+    def handle_timing_after_stop(self, actual_duration: float):
+        """Обработка оценки времени после остановки точки пользователем"""
+        print(f"Запуск оценки времени после остановки! Фактическое время: {actual_duration}мс")
+        
+        # ДЛЯ ЗАДАЧ СО ЗВЕЗДОЧКОЙ: сначала показываем крест на 900 мс
+        if self.current_task.fixation_shape == FixationShape.STAR:
+            print("Задача со звездочкой: показываем крест перед оценкой времени")
+            self.show_cross_before_timing(actual_duration)
+        else:
+            # Для других задач - сразу запускаем оценку времени
+            self.timing_screen.activate(actual_duration)
 
     def setup_pygame(self):
         """Настройка Pygame"""
@@ -896,33 +908,18 @@ class Experiment:
 
         # ДЛЯ ВСЕХ ТИПОВ ЗАДАЧ: определяем дальнейшие действия
         if self.current_task.timing_estimation:
-            # Для задач с оценкой времени (звездочка)
-            self.state.timing_delay_timer = pygame.time.get_ticks()
-            self.state.waiting_for_timing_delay = True
-            print(
-                f"Задача со звездочкой: установлена задержка перед оценкой времени. Фактическое время движения: {actual_duration}мс"
-            )
+            # Для задач с оценкой времени (звездочка) - СРАЗУ запускаем логику оценки времени
+            print(f"Задача со звездочкой: сразу запускаем оценку времени. Фактическое время движения: {actual_duration}мс")
+            self.handle_timing_after_stop(actual_duration)
         else:
             # Для задач БЕЗ оценки времени (треугольник и другие)
-            # СРАЗУ показываем инструкцию БЕЗ ЗАДЕРЖКИ
+            # СРАЗУ завершаем попытку и показываем инструкцию БЕЗ показа точки с ответом
             self.data_collector.complete_trial(completed_normally=True)
             self.instruction_screen.activate()
-            print(f"Треугольник: сразу показываем инструкцию. Время движения: {actual_duration}мс")
+            print(f"Треугольник: сразу показываем инструкцию БЕЗ точки с ответом. Время движения: {actual_duration}мс")
 
         reaction_time = self.space_press_time - self.start_time
         print(f"Пользователь остановил точку! Время реакции: {reaction_time}мс")
-
-    def handle_timing_after_stop(self, actual_duration: float):
-        """Обработка оценки времени после остановки точки пользователем"""
-        print(f"Запуск оценки времени после остановки! Фактическое время: {actual_duration}мс")
-        
-        # ДЛЯ ЗАДАЧ СО ЗВЕЗДОЧКОЙ: сначала показываем крест на 900 мс
-        if self.current_task.fixation_shape == FixationShape.STAR:
-            print("Задача со звездочкой: показываем крест перед оценкой времени")
-            self.show_cross_before_timing(actual_duration)
-        else:
-            # Для других задач - сразу запускаем оценку времени
-            self.timing_screen.activate(actual_duration)
 
     def show_cross_before_timing(self, actual_duration: float):
         """Показывает крест перед экраном оценки времени"""
@@ -1118,7 +1115,7 @@ class Experiment:
             # Проверка завершения траектории
             if (
                 self.moving_point.should_switch_to_next()
-                and not self.state.waiting_for_instruction
+                and not self.instruction_screen.is_active
             ):
                 self.handle_trajectory_completion(current_time)
 
@@ -1176,26 +1173,26 @@ class Experiment:
     #         self.state.waiting_for_instruction = False
     #         print("Показ инструкции 'Нажмите ПРОБЕЛ чтобы продолжить'...")
 
-    def check_timing_delay(self, current_time):
-        """Проверка задержки перед показом экрана оценки времени"""
-        if (
-            self.state.waiting_for_timing_delay
-            and not self.timing_screen.is_active
-            and current_time - self.state.timing_delay_timer >= self.state.TIMING_DELAY
-        ):
-            actual_duration = 0
-            if (
-                self.state.movement_started
-                and self.data_collector.current_trial_data["movement_start_time"]
-            ):
-                actual_duration = (
-                    self.state.timing_delay_timer
-                    - self.data_collector.current_trial_data["movement_start_time"]
-                )
+    # def check_timing_delay(self, current_time):
+    #     """Проверка задержки перед показом экрана оценки времени"""
+    #     if (
+    #         self.state.waiting_for_timing_delay
+    #         and not self.timing_screen.is_active
+    #         and current_time - self.state.timing_delay_timer >= self.state.TIMING_DELAY
+    #     ):
+    #         actual_duration = 0
+    #         if (
+    #             self.state.movement_started
+    #             and self.data_collector.current_trial_data["movement_start_time"]
+    #         ):
+    #             actual_duration = (
+    #                 self.state.timing_delay_timer
+    #                 - self.data_collector.current_trial_data["movement_start_time"]
+    #             )
 
-            self.state.waiting_for_timing_delay = False
-            self.handle_timing_after_stop(actual_duration)
-            print("Задержка завершена, запуск экрана оценки времени...")
+    #         self.state.waiting_for_timing_delay = False
+    #         self.handle_timing_after_stop(actual_duration)
+    #         print("Задержка завершена, запуск экрана оценки времени...")
 
     def check_fixation_preview(self, current_time):
         """Проверка завершения показа фиксационной точки"""
@@ -1247,12 +1244,6 @@ class Experiment:
             ):
                 # Только после фиксационной точки начинаем движение
                 self.update_moving_point(dt)
-
-            # Проверка задержки инструкции
-            # self.check_instruction_delay(current_time)
-
-            # Проверка задержки перед оценкой времени
-            self.check_timing_delay(current_time)
 
             # Отрисовка
             self.screen.fill(self.BACKGROUND_COLOR)
