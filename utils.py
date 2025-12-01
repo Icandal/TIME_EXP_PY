@@ -32,28 +32,38 @@ def load_trajectories(filename: str = "traj_lib.json") -> Dict[str, Any]:
 def save_experiment_data(
     participant_id: str, block_number: int, data: List[Dict[str, Any]]
 ) -> str:
-    """Сохранение данных эксперимента в JSON файл"""
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"experiment_data_{participant_id}_block{block_number}_{timestamp}.json"
-
-    experiment_data = {
-        "participant_id": participant_id,
-        "block_number": block_number,
-        "timestamp": timestamp,
-        "total_trials": len(data),
-        "trials": data,
-    }
-
+    """Сохраняет данные эксперимента в JSON файл"""
     try:
+        # Создаем имя файла с временной меткой
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"data/{participant_id}_block_{block_number}_{timestamp}.json"
+        
+        # Создаем структуру данных
+        experiment_data = {
+            "participant_id": participant_id,
+            "block_number": block_number,
+            "export_timestamp": timestamp,
+            "export_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "total_trials": len(data),
+            "trials": data
+        }
+        
+        # Сохраняем в файл
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(experiment_data, f, ensure_ascii=False, indent=2)
-
-        print(f"Данные сохранены в файл: {filename}")
+        
         return filename
-
     except Exception as e:
-        print(f"Ошибка при сохранении данных: {e}")
-        return ""
+        print(f"❌ Ошибка сохранения данных: {e}")
+        # Пытаемся сохранить в альтернативное место
+        try:
+            alt_filename = f"experiment_data_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            with open(alt_filename, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            return alt_filename
+        except Exception as e2:
+            print(f"💥 Критическая ошибка сохранения: {e2}")
+            return ""
 
 
 def get_current_time() -> float:

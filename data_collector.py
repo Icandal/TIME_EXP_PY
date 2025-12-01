@@ -12,58 +12,61 @@ class DataCollector:
         self.trial_number = 0  # Счетчик попыток
 
     def start_new_trial(
-        self,
-        trajectory_type: str,
-        duration: float,
-        speed: float,
-        trajectory_number: int,
-        condition_type: str,
-        block_number: int,
-        trial_in_block: int,
-        display_order: int,
-        assigned_speed: float,
-        assigned_duration: int,
-    ) -> None:
+    self,
+    trajectory_type: str,
+    duration: float,
+    speed: float,
+    trajectory_number: int,
+    condition_type: str,
+    block_number: int,
+    trial_in_block: int,
+    display_order: int,
+    assigned_speed: float,
+    assigned_duration: int,
+    start_delay: int = 0,  # НОВЫЙ ПАРАМЕТР: задержка перед стартом
+) -> None:
         """Начинает запись данных для новой попытки"""
         self.trial_number += 1
         self.current_trial_data = {
             # Основная информация о попытке
-            "trial_number": self.trial_number,  # Номер попытки в эксперименте (целое число)
-            "block_number": block_number,  # Номер блока (целое число)
-            "trial_in_block": trial_in_block,  # Номер попытки в блоке (целое число)
-            "display_order": display_order,  # Порядок показа в блоке после перемешивания (целое число)
+            "trial_number": self.trial_number,
+            "block_number": block_number,
+            "trial_in_block": trial_in_block,
+            "display_order": display_order,
             # Информация о траектории
-            "trajectory_type": trajectory_type,  # Категория траектории (строка: "T", "H1", и т.д.)
-            "duration": duration,  # Расчетная длительность траектории в мс (число с плавающей точкой)
-            "speed": speed,  # Расчетная скорость точки в px/кадр (число с плавающей точкой)
-            "assigned_speed": assigned_speed,  # Назначенная скорость из конфига (число с плавающей точкой или None)
-            "assigned_duration": assigned_duration,  # Назначенная длительность из конфига (целое число или None)
-            "trajectory_number": trajectory_number,  # Индекс траектории в категории (целое число)
-            "condition_type": condition_type,  # Тип условия (строка: "occlusion_half", "no_occlusion", и т.д.)
+            "trajectory_type": trajectory_type,
+            "duration": duration,
+            "speed": speed,
+            "assigned_speed": assigned_speed,
+            "assigned_duration": assigned_duration,
+            "trajectory_number": trajectory_number,
+            "condition_type": condition_type,
+            # НОВЫЙ ПАРАМЕТР: задержка перед стартом
+            "start_delay": start_delay,  # Задержка перед началом движения (мс)
             # Временные метки
-            "start_time": pygame.time.get_ticks(),  # Время начала попытки в мс (целое число)
-            "movement_start_time": None,  # Время начала движения точки в мс (целое число или None)
-            "stimulus_start_time": None,  # Время начала предъявления стимула в мс (целое число или None)
-            "movement_end_time": None,  # Время окончания движения точки в мс (целое число или None)
-            "occlusion_start_time": None,  # Время начала окклюзии в мс (целое число или None)
+            "start_time": pygame.time.get_ticks(),
+            "movement_start_time": None,
+            "stimulus_start_time": None,
+            "movement_end_time": None,
+            "occlusion_start_time": None,
             # Эталонные времена (для анализа)
-            "reference_response_time": None,  # Эталонное время до цели в мс (число с плавающей точкой или None)
-            "stimulus_presentation_time": None,  # Время предъявления стимула в мс (число с плавающей точкой или None)
-            "trajectory_completion_time": None,  # Время завершения траектории в мс (число с плавающей точкой или None)
+            "reference_response_time": None,
+            "stimulus_presentation_time": None,
+            "trajectory_completion_time": None,
             # Времена реакции
-            "actual_response_time_movement": None,  # Фактическое время от движения до ответа в мс (целое число или None)
-            "actual_response_time_stimulus": None,  # Фактическое время от стимула до ответа в мс (целое число или None)
-            "space_press_time": None,  # Время нажатия пробела в мс (целое число или None)
-            "reaction_time": None,  # Общее время реакции в мс (целое число или None)
+            "actual_response_time_movement": None,
+            "actual_response_time_stimulus": None,
+            "space_press_time": None,
+            "reaction_time": None,
             # Флаги состояния
-            "stopped_by_user": False,  # Остановлена ли точка пользователем (булевое)
-            "completed_normally": False,  # Завершена ли попытка нормально (булевое)
+            "stopped_by_user": False,
+            "completed_normally": False,
             # Дополнительные данные
-            "actual_trajectory_duration": None,  # Фактическое время прохождения траектории в мс (целое число или None)
-            "timing_estimation": None,  # Результаты оценки времени (словарь или None)
-            "reproduction_results": None,  # Результаты воспроизведения времени (словарь или None)
-            "occlusion_zone": None,  # Информация о зоне окклюзии (словарь или None)
-            "was_visible_when_stopped": True,  # Была ли точка видима при остановке (булевое)
+            "actual_trajectory_duration": None,
+            "timing_estimation": None,
+            "reproduction_results": None,
+            "occlusion_zone": None,
+            "was_visible_when_stopped": True,
         }
 
     def record_movement_start(self) -> None:
@@ -187,7 +190,11 @@ class DataCollector:
         print(f"\n=== Попытка {trial['trial_number']} завершена ===")
         print(f"Траектория: {trial['trajectory_type']}[{trial['trajectory_number']}]")
         print(f"Условие: {trial['condition_type']}")
-
+        
+        # ДОБАВЛЯЕМ: информацию о задержке
+        if trial.get("start_delay", 0) > 0:
+            print(f"Задержка перед стартом: {trial['start_delay']}мс")
+        
         if trial["reaction_time"]:
             print(f"Время реакции: {trial['reaction_time']}мс")
 

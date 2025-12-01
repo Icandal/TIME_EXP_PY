@@ -1,6 +1,7 @@
 import pygame
-from typing import List, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any
 from trajectory import Trajectory
+import random
 
 
 class MovingPoint:
@@ -17,12 +18,20 @@ class MovingPoint:
         self.current_segment = 0
         self.progress = 0.0  # прогресс по текущему сегменту (0.0 - 1.0)
         self.current_position = trajectory.points[0] if trajectory.points else (0, 0)
-        self.is_moving = True
+        
+        # ИЗМЕНЕНИЕ: по умолчанию точка не двигается
+        self.is_moving = False
         self.is_finished = False
         self.finished_timer = 0
         self.finished_delay = 900  # мс
         self.stopped_by_user = False
         self.beyond_trajectory = False  # НОВЫЙ ФЛАГ: точка вышла за пределы траектории
+
+        # ДОБАВЛЯЕМ: параметры для случайной задержки
+        self.start_delays = [200, 400]  # Возможные задержки в мс
+        self.start_delay = 0  # Выбранная задержка
+        self.start_delay_start_time = None  # Время начала задержки
+        self.is_in_start_delay = False  # Флаг: находимся ли в задержке перед стартом
 
         # Настройки скрытия точки
         self.occlusion_enabled = True
@@ -147,17 +156,58 @@ class MovingPoint:
         self.is_visible = True
         self.occlusion_active = False
 
+    def start_movement_with_delay(self):
+        """Начинает движение точки с задержкой"""
+        import random
+        
+        # Случайный выбор задержки: 200 или 400 мс
+        self.start_delay = random.choice(self.start_delays)
+        self.start_delay_start_time = pygame.time.get_ticks()
+        self.is_in_start_delay = True
+        self.is_moving = False  # Важно: пока не двигается
+        
+        print(f"[DEBUG] Задержка установлена: {self.start_delay}мс")
+        print(f"[DEBUG] Время начала задержки: {self.start_delay_start_time}")
+        
+        # Возвращаем выбранную задержку для записи в данные
+        return self.start_delay
+
     def start_movement(self) -> None:
-        """Запускает отсчет времени для движения (вызывается при начале движения)"""
+        """Запускает отсчет времени для движения (вызывается после задержки)"""
+        self.is_moving = True
         self.movement_start_time = pygame.time.get_ticks()
         self.occlusion_started = False
         self.occlusion_active = False
         print(
-            f"Отсчет времени для окклюзии запущен. Окклюзия начнется через {self.occlusion_delay}мс"
+            f"Движение точки началось! Окклюзия начнется через {self.occlusion_delay}мс"
         )
 
     def update(self, dt: float) -> None:
         """Обновляет позицию точки и видимость"""
+        # ОТЛАДОЧНЫЙ ВЫВОД
+        current_time = pygame.time.get_ticks()
+        
+        # Проверяем задержку перед стартом
+        if self.is_in_start_delay:
+            if self.start_delay_start_time is None:
+                self.start_delay_start_time = current_time
+                return
+                
+            elapsed_delay = current_time - self.start_delay_start_time
+            
+            print(f"[DEBUG] В задержке: {elapsed_delay}/{self.start_delay} мс")
+            
+            if elapsed_delay >= self.start_delay:
+                # Задержка завершена, начинаем движение
+                self.is_in_start_delay = False
+                self.is_moving = True
+                self.movement_start_time = current_time
+                print(f"✓ Задержка завершена! Начинаем движение")
+                # Продолжаем выполнение для обновления позиции
+            else:
+                # Еще в задержке
+                return
+
         if not self.is_moving or self.is_finished:
             return
 
@@ -420,11 +470,16 @@ class MovingPoint:
         self.current_position = (
             new_trajectory.points[0] if new_trajectory.points else (0, 0)
         )
-        self.is_moving = True
+        self.is_moving = False  # Точка по умолчанию не двигается
         self.is_finished = False
         self.finished_timer = 0
         self.stopped_by_user = False
         self.beyond_trajectory = False  # СБРАСЫВАЕМ ФЛАГ
+        
+        # Сбрасываем параметры задержки
+        self.start_delay = 0
+        self.start_delay_start_time = None
+        self.is_in_start_delay = False
 
         # Сбрасываем временные параметры
         self.movement_start_time = None
@@ -451,5 +506,7 @@ class MovingPoint:
             "occlusion_started": self.occlusion_started,
             "occlusion_active": self.occlusion_active,
             "is_visible": self.is_visible,
-            "beyond_trajectory": self.beyond_trajectory,  # ДОБАВЛЯЕМ НОВЫЙ ФЛАГ
+            "beyond_trajectory": self.beyond_trajectory,
+            "is_in_start_delay": self.is_in_start_delay,
+            "start_delay": self.start_delay,
         }
