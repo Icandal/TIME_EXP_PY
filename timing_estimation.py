@@ -52,17 +52,17 @@ class TimingEstimationScreen:
             screen, self.circle_color, (center_x, center_y), self.circle_radius
         )
 
-        # Отображаем инструкцию (только первые 2 секунды)
-        current_time = pygame.time.get_ticks() - self.start_time
-        if current_time < 2000:  # Показываем инструкцию 2 секунды
-            font = pygame.font.Font(None, 36)
-            instruction_text = font.render(
-                "Нажмите ПРОБЕЛ, когда пройдет столько же времени", True, (0, 0, 0)
-            )
-            text_rect = instruction_text.get_rect(
-                center=(self.screen_width // 2, self.screen_height - 50)
-            )
-            screen.blit(instruction_text, text_rect)
+        # УБРАНА инструкция "Нажмите ПРОБЕЛ, когда пройдет столько же времени"
+        # Просто черный кружок без текста
+        # if current_time < 2000:  # Показываем инструкцию 2 секунды
+        #     font = pygame.font.Font(None, 36)
+        #     instruction_text = font.render(
+        #         "Нажмите ПРОБЕЛ, когда пройдет столько же времени", True, (0, 0, 0)
+        #     )
+        #     text_rect = instruction_text.get_rect(
+        #         center=(self.screen_width // 2, self.screen_height - 50)
+        #     )
+        #     screen.blit(instruction_text, text_rect)
 
     def get_results(self) -> dict:
         """Возвращает результаты оценки времени"""
