@@ -11,20 +11,24 @@ class DataCollector:
         self.all_trials_data: List[Dict[str, Any]] = []  # Все собранные данные
         self.trial_number = 0  # Счетчик попыток
 
+    def get_start_delay(self) -> int:
+        """Возвращает задержку перед стартом из текущей попытки"""
+        return self.current_trial_data.get("start_delay", 0)
+
     def start_new_trial(
-    self,
-    trajectory_type: str,
-    duration: float,
-    speed: float,
-    trajectory_number: int,
-    condition_type: str,
-    block_number: int,
-    trial_in_block: int,
-    display_order: int,
-    assigned_speed: float,
-    assigned_duration: int,
-    start_delay: int = 0,  # НОВЫЙ ПАРАМЕТР: задержка перед стартом
-) -> None:
+        self,
+        trajectory_type: str,
+        duration: float,
+        speed: float,
+        trajectory_number: int,
+        condition_type: str,
+        block_number: int,
+        trial_in_block: int,
+        display_order: int,
+        assigned_speed: float,
+        assigned_duration: int,
+        start_delay: int = 0,  # НОВЫЙ ПАРАМЕТР: задержка перед стартом
+    ) -> None:
         """Начинает запись данных для новой попытки"""
         self.trial_number += 1
         self.current_trial_data = {
@@ -190,11 +194,11 @@ class DataCollector:
         print(f"\n=== Попытка {trial['trial_number']} завершена ===")
         print(f"Траектория: {trial['trajectory_type']}[{trial['trajectory_number']}]")
         print(f"Условие: {trial['condition_type']}")
-        
+
         # ДОБАВЛЯЕМ: информацию о задержке
         if trial.get("start_delay", 0) > 0:
             print(f"Задержка перед стартом: {trial['start_delay']}мс")
-        
+
         if trial["reaction_time"]:
             print(f"Время реакции: {trial['reaction_time']}мс")
 

@@ -9,18 +9,18 @@ def load_trajectories(filename: str = "traj_lib.json") -> Dict[str, Any]:
     try:
         with open(filename, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
+
         print("=" * 60)
         print("ЗАГРУЖЕНЫ ТРАЕКТОРИИ С БЛОКАМИ:")
         print("=" * 60)
-        
+
         # Просто возвращаем данные как есть, сохраняя структуру блоков
         for block_name in sorted(data.keys()):
             trajectories_count = sum(len(trajs) for trajs in data[block_name].values())
             print(f"📦 {block_name}: {trajectories_count} траекторий")
-            
+
         return data
-            
+
     except FileNotFoundError:
         print(f"Файл {filename} не найден!")
         return {}
@@ -37,7 +37,7 @@ def save_experiment_data(
         # Создаем имя файла с временной меткой
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"data/{participant_id}_block_{block_number}_{timestamp}.json"
-        
+
         # Создаем структуру данных
         experiment_data = {
             "participant_id": participant_id,
@@ -45,13 +45,13 @@ def save_experiment_data(
             "export_timestamp": timestamp,
             "export_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "total_trials": len(data),
-            "trials": data
+            "trials": data,
         }
-        
+
         # Сохраняем в файл
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(experiment_data, f, ensure_ascii=False, indent=2)
-        
+
         return filename
     except Exception as e:
         print(f"❌ Ошибка сохранения данных: {e}")

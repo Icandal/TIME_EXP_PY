@@ -21,7 +21,7 @@ class ReproductionTask:
         self.response_time = 0
         self.space_pressed = False
 
-        # Задержка перед началом (200 или 400 мс)
+        # Задержка перед началом (200 или 400 мс) - ДОБАВЛЯЕМ
         self.start_delays = [200, 400]
         self.start_delay = 0
         self.in_start_delay = False
@@ -36,11 +36,11 @@ class ReproductionTask:
     def activate(self, target_duration: int) -> None:
         """Активирует задачу воспроизведения времени"""
         self.is_active = True
-        
+
         # Начинаем с первого крестика, который ждет пробела
         self.state = "first_cross_waiting"
         self.state_start_time = pygame.time.get_ticks()
-        
+
         self.target_duration = target_duration
         self.space_pressed = False
         self.response_time = 0
@@ -60,17 +60,18 @@ class ReproductionTask:
             if self.state == "first_cross_waiting":
                 # Начинаем задержку 200/400 мс
                 import random
+
                 self.start_delay = random.choice(self.start_delays)
                 self.delay_start_time = pygame.time.get_ticks()
                 self.state = "in_start_delay"
                 print(f"Начата задержка: {self.start_delay}мс")
-                
+
             elif self.state == "second_cross_waiting":
                 # Переход от второго крестика к ответу
                 self.state = "response_waiting"
                 self.state_start_time = pygame.time.get_ticks()
                 print(f"Переход: second_cross_waiting → response_waiting")
-                
+
             elif self.state == "response_waiting" and not self.space_pressed:
                 # Финальный ответ
                 self.space_pressed = True
@@ -94,7 +95,9 @@ class ReproductionTask:
                 self.state = "first_circle_auto"
                 self.state_start_time = current_time
                 self.in_start_delay = False
-                print(f"Задержка завершена, начинается круг на {self.target_duration}мс")
+                print(
+                    f"Задержка завершена, начинается круг на {self.target_duration}мс"
+                )
 
         # Автоматический переход от круга ко второму крестику
         elif self.state == "first_circle_auto":
@@ -115,12 +118,10 @@ class ReproductionTask:
         if self.state == "first_cross_waiting":
             # Первый крестик (ждать пробел) - С ИНСТРУКЦИЕЙ
             self.fixation_cross.draw(screen)
-            
+
             # Инструкция
             font = pygame.font.Font(None, 36)
-            instruction = font.render(
-                "Нажмите ПРОБЕЛ чтобы начать", True, (0, 0, 0)
-            )
+            instruction = font.render("Нажмите ПРОБЕЛ чтобы начать", True, (0, 0, 0))
             text_rect = instruction.get_rect(
                 center=(self.screen_width // 2, self.screen_height - 50)
             )
@@ -129,7 +130,7 @@ class ReproductionTask:
         elif self.state == "in_start_delay":
             # Во время задержки просто крестик (без инструкции)
             self.fixation_cross.draw(screen)
-            
+
             # БЕЗ инструкции "нажмите пробел"
             # Просто крестик
 
@@ -140,13 +141,13 @@ class ReproductionTask:
             pygame.draw.circle(
                 screen, self.circle_color, (center_x, center_y), self.circle_radius
             )
-            
+
             # БЕЗ инструкции - круг показывается автоматически
 
         elif self.state == "second_cross_waiting":
             # Второй крестик (ждать пробел) - С НОВОЙ ИНСТРУКЦИЕЙ
             self.fixation_cross.draw(screen)
-            
+
             # ДОБАВЛЯЕМ инструкцию для второго крестика
             font = pygame.font.Font(None, 36)
             instruction = font.render(

@@ -18,7 +18,7 @@ class MovingPoint:
         self.current_segment = 0
         self.progress = 0.0  # прогресс по текущему сегменту (0.0 - 1.0)
         self.current_position = trajectory.points[0] if trajectory.points else (0, 0)
-        
+
         # ИЗМЕНЕНИЕ: по умолчанию точка не двигается
         self.is_moving = False
         self.is_finished = False
@@ -159,16 +159,16 @@ class MovingPoint:
     def start_movement_with_delay(self):
         """Начинает движение точки с задержкой"""
         import random
-        
+
         # Случайный выбор задержки: 200 или 400 мс
         self.start_delay = random.choice(self.start_delays)
         self.start_delay_start_time = pygame.time.get_ticks()
         self.is_in_start_delay = True
         self.is_moving = False  # Важно: пока не двигается
-        
+
         print(f"[DEBUG] Задержка установлена: {self.start_delay}мс")
         print(f"[DEBUG] Время начала задержки: {self.start_delay_start_time}")
-        
+
         # Возвращаем выбранную задержку для записи в данные
         return self.start_delay
 
@@ -186,17 +186,17 @@ class MovingPoint:
         """Обновляет позицию точки и видимость"""
         # ОТЛАДОЧНЫЙ ВЫВОД
         current_time = pygame.time.get_ticks()
-        
+
         # Проверяем задержку перед стартом
         if self.is_in_start_delay:
             if self.start_delay_start_time is None:
                 self.start_delay_start_time = current_time
                 return
-                
+
             elapsed_delay = current_time - self.start_delay_start_time
-            
+
             print(f"[DEBUG] В задержке: {elapsed_delay}/{self.start_delay} мс")
-            
+
             if elapsed_delay >= self.start_delay:
                 # Задержка завершена, начинаем движение
                 self.is_in_start_delay = False
@@ -212,12 +212,12 @@ class MovingPoint:
             return
 
         points = self.trajectory.points
-        
+
         # ЕСЛИ ТОЧКА ВЫШЛА ЗА ПРЕДЕЛЫ ТРАЕКТОРИИ - ПРОДОЛЖАЕМ ДВИЖЕНИЕ ПО ПРЯМОЙ
         if self.beyond_trajectory:
             self._continue_beyond_trajectory()
             return
-            
+
         if self.current_segment >= len(points) - 1:
             # ТОЧКА ДОСТИГЛА КОНЦА ТРАЕКТОРИИ - ПРОДОЛЖАЕМ ДВИЖЕНИЕ ПО ПРЯМОЙ
             self.beyond_trajectory = True
@@ -264,27 +264,27 @@ class MovingPoint:
         """Продолжает движение точки за пределы траектории по прямой"""
         if len(self.trajectory.points) < 2:
             return
-            
+
         # Берем последний сегмент траектории для определения направления
         last_point = self.trajectory.points[-1]
         second_last_point = self.trajectory.points[-2]
-        
+
         # Вычисляем направление движения
         dx = last_point[0] - second_last_point[0]
         dy = last_point[1] - second_last_point[1]
-        
+
         # Нормализуем направление (делаем вектор единичной длины)
-        length = (dx**2 + dy**2)**0.5
+        length = (dx**2 + dy**2) ** 0.5
         if length > 0:
             dx /= length
             dy /= length
-        
+
         # Продолжаем движение в том же направлении
         self.current_position = (
             self.current_position[0] + dx * self.speed,
-            self.current_position[1] + dy * self.speed
+            self.current_position[1] + dy * self.speed,
         )
-        
+
         # ОБНОВЛЯЕМ ВИДИМОСТЬ ДАЖЕ ЗА ПРЕДЕЛАМИ ТРАЕКТОРИИ
         # Для timed окклюзии видимость определяется временем, для других - точка всегда видима
         self._update_visibility()
@@ -385,7 +385,7 @@ class MovingPoint:
         # Устанавливаем позицию на последней точке (только если не вышли за пределы)
         if not self.beyond_trajectory and self.trajectory.points:
             self.current_position = self.trajectory.points[-1]
-        
+
         # Гарантируем, что точка видима в конце ТОЛЬКО ЕСЛИ НЕ БЫЛА В ОККЛЮЗИИ
         # Для timed окклюзии - точка становится видимой только если окклюзия не активна
         if not self.occlusion_active:
@@ -475,7 +475,7 @@ class MovingPoint:
         self.finished_timer = 0
         self.stopped_by_user = False
         self.beyond_trajectory = False  # СБРАСЫВАЕМ ФЛАГ
-        
+
         # Сбрасываем параметры задержки
         self.start_delay = 0
         self.start_delay_start_time = None

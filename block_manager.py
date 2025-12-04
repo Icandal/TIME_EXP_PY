@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Optional
 from exp_config import BlockConfig
 
+
 class BlockManager:
     def __init__(
         self,
@@ -12,7 +13,7 @@ class BlockManager:
         self.trajectories_data: Dict[str, Any] = trajectories_data
         self.available_speeds: List[float] = available_speeds
         self.available_durations: List[int] = available_durations
-        
+
         # СОЗДАЕМ БЛОКИ ИЗ СТРУКТУРЫ ФАЙЛА
         self.blocks = self._create_blocks_from_file_structure()
         self.current_block_index = 0
@@ -29,49 +30,54 @@ class BlockManager:
     def _create_blocks_from_file_structure(self) -> List[BlockConfig]:
         """Создает блоки на основе структуры файла"""
         blocks = []
-        
+
         print("=" * 50)
         print("СОЗДАНИЕ БЛОКОВ ИЗ ФАЙЛА:")
         print("=" * 50)
-        
+
         for block_name in sorted(self.trajectories_data.keys()):
             # Для каждого блока в файле создаем BlockConfig
             block = BlockConfig(
                 name=block_name,
                 tasks_distribution={},  # Не используется в новой системе
-                trajectories_category=block_name  # Используем имя блока как категорию
+                trajectories_category=block_name,  # Используем имя блока как категорию
             )
             blocks.append(block)
             print(f"Создан блок: {block_name}")
-            
+
         print(f"Всего создано {len(blocks)} блоков")
         print("=" * 50)
-        
+
         return blocks
 
-    def _generate_trial_sequence_for_block(self, block: BlockConfig) -> List[Dict[str, Any]]:
+    def _generate_trial_sequence_for_block(
+        self, block: BlockConfig
+    ) -> List[Dict[str, Any]]:
         """Генерирует последовательность попыток для конкретного блока"""
         trials = []
         block_data = self.trajectories_data[block.name]
-        
+
         print(f"  Генерация попыток для блока '{block.name}':")
-        
+
         # Проходим по всем категориям в блоке в порядке их следования в файле
         for category, trajectories in block_data.items():
             # Игнорируем нижнее подчеркивание в названии категории для декодирования
-            clean_category = category.split('_')[0]  # Убираем _1, _2 и т.д.
-            
+            clean_category = category.split("_")[0]  # Убираем _1, _2 и т.д.
+
             # Декодируем параметры из названия категории
             from exp_config import ExperimentConfig
+
             config = ExperimentConfig()
             decoded_params = config.decode_category(clean_category)
-            
+
             print(f"    Категория: {category} -> {clean_category}")
-            print(f"      Задача: {decoded_params['task_index']}, "
+            print(
+                f"      Задача: {decoded_params['task_index']}, "
                 f"Скорость: {decoded_params['speed']}, "
-                f"Длительность: {decoded_params['duration']}")
+                f"Длительность: {decoded_params['duration']}"
+            )
             print(f"      Траекторий в категории: {len(trajectories)}")
-            
+
             # Создаем попытки для всех траекторий в этой категории
             for trajectory_idx in range(len(trajectories)):
                 trial = {
@@ -103,14 +109,16 @@ class BlockManager:
             block_trials = self.block_sequences[self.current_block_index]
             if self.current_trial_index < len(block_trials):
                 return block_trials[self.current_trial_index]
-        
+
         return {}
 
     def move_to_next_trial(self) -> bool:
         """Переходит к следующей попытке, возвращает True если блок завершен"""
         self.current_trial_index += 1
 
-        if self.current_trial_index >= len(self.block_sequences[self.current_block_index]):
+        if self.current_trial_index >= len(
+            self.block_sequences[self.current_block_index]
+        ):
             # Блок завершен
             self.current_trial_index = 0
             self.current_block_index += 1
@@ -173,7 +181,9 @@ class BlockManager:
             "trial_in_block": current_trial["trial_in_block"],
             "display_order": current_trial["display_order"],
             "total_trials_in_block": total_trials_in_block,
-            "block_name": current_trial["block_name"],  # Используем оригинальное имя блока
+            "block_name": current_trial[
+                "block_name"
+            ],  # Используем оригинальное имя блока
             "task_type": current_trial["task_type"],
             "trajectory_category": current_block.name,
             "actual_trajectory_category": current_trial["actual_trajectory_category"],
