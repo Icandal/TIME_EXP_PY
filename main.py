@@ -11,6 +11,7 @@ from utils import load_trajectories, save_experiment_data
 from timing_estimation import TimingEstimationScreen
 from reproduction_task import ReproductionTask
 from block_manager import BlockManager
+from block_summary import BlockSummaryScreen
 
 
 class FixationPreviewScreen:
@@ -50,7 +51,6 @@ class FixationPreviewScreen:
     def hide(self) -> None:
         """Скрывает экран"""
         self.showing = False
-        print(f"Скрыта фиксационная точка")
 
     def draw(self, screen: pygame.Surface, trajectory_manager=None) -> None:
         """Рисует экран с фиксационной точкой и траекторией"""
@@ -151,9 +151,6 @@ class KeyHandler:
 
         # ВАЖНО: Если задача воспроизведения активна, НЕ обрабатываем пробел здесь
         if exp.reproduction_task.is_active:
-            print(
-                f"[C3 KeyHandler] Пропускаем пробел, т.к. задача воспроизведения уже активна"
-            )
             return
 
         if (
@@ -169,7 +166,7 @@ class KeyHandler:
 
         elif exp.state.waiting_for_movement_start:
             # Нажатие пробела для начала
-            print(f"Нажатие пробела для начала задачи")
+            print(f"Начало задачи")
 
             if exp.current_task.reproduction_task:
                 # Для задачи воспроизведения СРАЗУ начинаем задачу
@@ -244,7 +241,7 @@ class KeyHandler:
 class ScreenManager:
     """Класс для управления экранами"""
 
-    def __init__(self, experiment) -> None:
+    def __init__(self, experiment):
         self.experiment = experiment
         self.screen_handlers = {
             "initial_instruction": self.draw_initial_instruction,
@@ -255,6 +252,8 @@ class ScreenManager:
             "start_delay": self.draw_start_delay,
             "main": self.draw_main_screen,
         }
+        # Отключаем дебаг
+        self.show_debug = False
 
     def get_current_screen_type(self):
         """Определение текущего типа экрана"""
@@ -270,12 +269,8 @@ class ScreenManager:
         elif exp.reproduction_task.is_active:
             return "reproduction"
         elif exp.showing_cross_for_star:
-            print(
-                f"[ScreenManager] Экран: cross_for_star (showing_cross_for_star={exp.showing_cross_for_star})"
-            )
             return "cross_for_star"
         elif exp.state.waiting_for_movement_start:
-            print(f"[ScreenManager] Экран: waiting_for_start")
             return "waiting_for_start"
         elif exp.state.in_start_delay:
             return "start_delay"
@@ -349,15 +344,6 @@ class ScreenManager:
         if exp.current_task.has_trajectory and exp.trajectory_manager.has_trajectory():
             exp.trajectory_manager.draw_current(exp.screen)
 
-        # УБРАНО: показываем, что идет задержка перед стартом
-        # Только крестик и траектория без текста
-        # font = pygame.font.Font(None, 36)
-        # delay_text = font.render(f"Задержка перед стартом...", True, (0, 0, 0))
-        # text_rect = delay_text.get_rect(
-        #     center=(exp.screen_width // 2, exp.screen_height - 50)
-        # )
-        # exp.screen.blit(delay_text, text_rect)
-
     def draw_main_screen(self):
         """Отрисовка основного экрана"""
         exp = self.experiment
@@ -397,11 +383,13 @@ class Experiment:
         self.cross_for_star_start_time = 0
         self.pending_timing_duration = 0
 
+        # Для сводки блока
+        self.summary_screen = None
+
     def record_start_delay(self, delay_ms: int):
         """Записывает информацию о задержке перед стартом"""
         if hasattr(self, "data_collector") and self.data_collector:
             self.data_collector.current_trial_data["start_delay"] = delay_ms
-            print(f"Записана задержка перед стартом: {delay_ms}мс")
 
     def setup_pygame(self):
         """Настройка Pygame"""
@@ -489,10 +477,6 @@ class Experiment:
         # Состояние фотосенсора: active, passive, occlusion
         self.photo_sensor_state = "passive"
 
-        print(
-            f"Фото-сенсор: позиция ({self.photo_sensor_position[0]}, {self.photo_sensor_position[1]})"
-        )
-
         # Скрытый переключатель для минималистичного режима
         self.minimal_mode = True
 
@@ -534,7 +518,6 @@ class Experiment:
         """Загрузка текущей траектории (только для задач с траекторией)"""
         try:
             if self.current_block is None:
-                print("❌ Ошибка: текущий блок не определен")
                 return
 
             if self.current_task.has_trajectory:
@@ -542,28 +525,14 @@ class Experiment:
                 actual_category = self.current_trial["actual_trajectory_category"]
                 trajectory_index = self.current_trial["trajectory_index"]
 
-                print(f"🔄 Загрузка траектории для задачи с траекторией:")
-                print(f"   Блок: {block_name}")
-                print(f"   Категория: {actual_category}")
-                print(f"   Индекс: {trajectory_index}")
-
                 self.trajectory_manager.load_trajectory(
                     block_name, actual_category, trajectory_index
                 )
 
                 if self.trajectory_manager.has_trajectory():
                     info = self.trajectory_manager.get_current_trajectory_info()
-                    print(
-                        f"✅ Траектория загружена: {info['point_count']} точек, длина: {info['total_length']:.1f}px"
-                    )
-                else:
-                    print(f"⚠️  Пустая траектория для задачи с траекторией")
-            else:
-                self.trajectory_manager.current_trajectory = None
-                print("ℹ️ Задача без траектории - пропускаем загрузку")
 
         except Exception as e:
-            print(f"❌ Ошибка загрузки траектории: {e}")
             self.trajectory_manager.current_trajectory = None
 
     def calculate_trajectory_parameters(self):
@@ -571,7 +540,6 @@ class Experiment:
         if not self.current_task.has_trajectory:
             self.assigned_speed = 0
             self.calculated_duration = 0
-            print("ℹ️ Задача без траектории - пропускаем расчет параметров")
             return
 
         decoded_params = self.current_trial.get("decoded_params", {})
@@ -596,7 +564,6 @@ class Experiment:
                     self.assigned_speed
                 )
             )
-            print(f"📏 Расчет длительности: {self.calculated_duration:.0f} мс")
         else:
             print("⚠️ Невозможно рассчитать длительность - нет траектории")
 
@@ -676,12 +643,6 @@ class Experiment:
         frames_required = total_length / speed_px_per_frame
         reference_response_time = frames_required * (1000 / 60)
 
-        print(f"РАСЧЕТ ЭТАЛОННОГО ВРЕМЕНИ:")
-        print(f"  Длина траектории: {total_length:.1f} px")
-        print(f"  Скорость: {speed_px_per_frame} px/кадр")
-        print(f"  Требуется кадров: {frames_required:.1f}")
-        print(f"  Эталонное время: {reference_response_time:.0f} мс")
-
         stimulus_presentation_time = 0.0
         trajectory_completion_time = reference_response_time
 
@@ -737,7 +698,6 @@ class Experiment:
         start_delay = 0
         if self.moving_point is not None and hasattr(self.moving_point, "start_delay"):
             start_delay = self.moving_point.start_delay
-            print(f"Сохраняем информацию о задержке: {start_delay}мс")
 
         # Записываем данные о попытке
         self.data_collector.start_new_trial(
@@ -823,11 +783,11 @@ class Experiment:
 
     def handle_block_completion(self):
         """Обработка завершения блока"""
-        self.save_current_data()
-        self.update_progress_info()
-        self.data_collector = DataCollector(
-            self.config.participant_id, self.progress_info["block_number"]
-        )
+        print(f"=== БЛОК {self.progress_info['block_number']} ЗАВЕРШЕН ===")
+        print(f"Всего попыток в блоке: {len(self.data_collector.get_all_data())}")
+        
+        # Показываем сводку блока
+        self.show_block_summary()
 
     def setup_next_trial(self):
         """Настройка следующей попытки"""
@@ -853,10 +813,6 @@ class Experiment:
             self.current_trial["speed"] = speed
             self.current_trial["duration"] = duration
 
-            print(
-                f"Применены параметры из категории: задача={task_type}, скорость={speed}, длительность={duration}"
-            )
-
         self.current_task = self.config.get_current_task_config(
             self.current_trial["task_type"]
         )
@@ -875,11 +831,8 @@ class Experiment:
             )
         )
 
-        print(f"ФИНАЛЬНАЯ СКОРОСТЬ ДЛЯ ТОЧКИ: {self.assigned_speed} px/кадр")
-
         # Сбрасываем состояние фотосенсора при начале новой попытки
         self.photo_sensor_state = "passive"
-        print("Фотосенсор: белый (начало задачи)")
 
         # Обновляем фиксационную точку
         self.fixation.set_shape(self.current_task.fixation_shape)
@@ -895,15 +848,7 @@ class Experiment:
                 else:
                     self.moving_point.reset(self.trajectory_manager.current_trajectory)
                     # Явно обновляем скорость после reset
-                    print(f"=== ЯВНОЕ ОБНОВЛЕНИЕ СКОРОСТИ ===")
-                    print(
-                        f"  Скорость до обновления: {self.moving_point.speed} px/кадр"
-                    )
-                    print(f"  Новая скорость: {self.assigned_speed} px/кадр")
                     self.moving_point.speed = self.assigned_speed
-                    print(
-                        f"  Скорость после обновления: {self.moving_point.speed} px/кадр"
-                    )
 
                 # Проверяем, что moving_point не None перед вызовом методов
                 if self.moving_point is not None:
@@ -919,7 +864,6 @@ class Experiment:
             # Очищаем движущуюся точку и траекторию
             self.moving_point = None
             self.trajectory_manager.current_trajectory = None
-            print("Задача без траектории (крестик) - очищены данные о траектории")
 
         # Сбрасываем состояние
         self.start_time = pygame.time.get_ticks()
@@ -941,11 +885,6 @@ class Experiment:
             self.fixation_preview_screen.show(
                 self.current_task.fixation_shape, show_trajectory=show_trajectory
             )
-
-            print(
-                f"Ожидание ПРОБЕЛ для начала ({self.current_task.fixation_shape.value})"
-            )
-            print("Траектория будет показана")
 
         elif self.current_task.reproduction_task:
             # Для задач ВОСПРОИЗВЕДЕНИЯ (C3): НЕ показываем FixationPreviewScreen
@@ -987,8 +926,6 @@ class Experiment:
 
             # Фотосенсор белый во время задержки
             self.photo_sensor_state = "passive"
-            print(f"Начата случайная задержка: {self.moving_point.start_delay}мс")
-            print("Фотосенсор: белый (во время задержки перед стартом)")
 
             # Запускаем задержку в точке
             self.moving_point.start_movement_with_delay()
@@ -1054,7 +991,6 @@ class Experiment:
             print(
                 "[C2] Показан крестик для задачи со звездочкой. Нажмите ПРОБЕЛ для оценки времени."
             )
-            print("[C2] Фотосенсор: белый (крестик перед оценкой)")
 
         else:
             # Для задач БЕЗ оценки времени (треугольник)
@@ -1062,7 +998,6 @@ class Experiment:
             self.complete_and_continue()
 
         reaction_time = self.space_press_time - self.start_time
-        print(f"Пользователь остановил точку! Время реакции: {reaction_time}мс")
 
     def complete_and_continue(self):
         """Завершает текущую попытку и сразу переходит к следующей"""
@@ -1082,6 +1017,84 @@ class Experiment:
                 self.handle_block_completion()
 
         self.setup_next_trial()
+
+    def show_block_summary(self):
+        """Показывает сводку по блоку с баллом точности и вопросом о длительности"""
+        self.summary_screen = BlockSummaryScreen(
+            self.screen_width,
+            self.screen_height,
+            self.data_collector,
+            self.current_block,
+            self.progress_info["block_number"]
+        )
+        self.summary_screen.activate()
+
+    def handle_block_summary(self, event) -> bool:
+        """Обработка экрана сводки блока"""
+        if self.summary_screen and self.summary_screen.is_active:
+            if self.summary_screen.handle_event(event):
+                # Получаем ответ пользователя о длительности блока
+                duration_response = self.summary_screen.get_duration_response()
+                
+                # Сохраняем ответ в данных
+                if duration_response:
+                    print(f"Ответ о длительности блока: {duration_response['perceived_duration']}")
+                    self.save_block_duration_response(duration_response)
+                
+                # Сохраняем данные блока
+                self.save_current_data()
+                
+                # Скрываем сводку
+                self.summary_screen.deactivate()
+                
+                # Переходим к следующему блоку
+                block_completed = self.block_manager.move_to_next_trial()
+                
+                if self.block_manager.is_experiment_complete():
+                    print("=== Эксперимент завершен! Все блоки пройдены. ===")
+                    self.state.running = False
+                    return True
+                
+                # Обновляем прогресс
+                self.update_progress_info()
+                
+                # Создаем новый сборщик данных для нового блока
+                self.data_collector = DataCollector(
+                    self.config.participant_id, 
+                    self.progress_info["block_number"]
+                )
+                
+                # Настраиваем следующую попытку
+                self.setup_next_trial()
+                return True
+        return False
+    
+    def save_block_duration_response(self, response_data: Dict[str, Any]):
+        """Сохраняет ответ о длительности блока в отдельный файл"""
+        try:
+            import json
+            from datetime import datetime
+            
+            # Создаем имя файла
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"data/{self.config.participant_id}_block_duration_{timestamp}.json"
+            
+            # Добавляем метаданные
+            full_response = {
+                "participant_id": self.config.participant_id,
+                "export_timestamp": timestamp,
+                "export_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "response": response_data
+            }
+            
+            # Сохраняем в файл
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(full_response, f, ensure_ascii=False, indent=2)
+            
+            print(f"✅ Ответ о длительности блока сохранен в файл: {filename}")
+            
+        except Exception as e:
+            print(f"❌ Ошибка сохранения ответа о длительности блока: {e}")
 
     def show_help_info(self):
         """Показать информацию о управлении"""
@@ -1124,22 +1137,11 @@ class Experiment:
         # Определяем цвет в зависимости от состояния
         if self.photo_sensor_state == "passive":
             color = self.photo_sensor_color_passive  # Белый - пассивное состояние
-            state_name = "БЕЛЫЙ"
         elif self.photo_sensor_state == "occlusion":
             color = self.photo_sensor_color_occlusion  # Красный при окклюзии
-            state_name = "КРАСНЫЙ"
         else:
             color = self.photo_sensor_color_active  # Черный в активном режиме
-            state_name = "ЧЕРНЫЙ"
-
-        # Отладочный вывод
-        screen_type = (
-            self.screen_manager.get_current_screen_type()
-            if hasattr(self, "screen_manager")
-            else "unknown"
-        )
-        print(f"[ИНДИКАТОР] Цвет: {state_name}, Экран: {screen_type}")
-
+        
         # Рисуем индикатор
         pygame.draw.circle(
             self.screen,
@@ -1190,23 +1192,19 @@ class Experiment:
 
     def handle_special_screens(self, event):
         """Обработка специальных экранов"""
+        # Обработка экрана сводки блока
+        if self.summary_screen and self.summary_screen.is_active:
+            return self.handle_block_summary(event)
+        
         # Обработка крестика для задачи со звездочкой (C2)
         if self.showing_cross_for_star:
-            print(
-                f"[C2 handle_special_screens] showing_cross_for_star=True, событие: {event}"
-            )
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                print(f"[C2] Нажат пробел на крестике")
                 # Нажатие пробела - начинаем оценку времени
                 self.showing_cross_for_star = False
                 self.cross_for_star = None
 
                 # Меняем фотосенсор на черный для оценки времени
                 self.photo_sensor_state = "active"
-                print(
-                    f"[C2] Начинаем оценку времени после крестика. Фактическое время: {self.pending_timing_duration}мс"
-                )
-                print("[C2] Фотосенсор: черный (оценка времени)")
 
                 self.timing_screen.activate(self.pending_timing_duration)
                 return True
@@ -1214,7 +1212,6 @@ class Experiment:
 
         # Обработка экрана оценки времени (C2)
         if self.timing_screen.is_active:
-            print(f"[C2] Обработка оценки времени, событие: {event}")
             if self.timing_screen.handle_event(event):
                 timing_results = self.timing_screen.get_results()
                 self.data_collector.record_timing_estimation(timing_results)
@@ -1222,23 +1219,13 @@ class Experiment:
 
                 # После оценки времени сразу переходим к следующей попытке
                 self.complete_and_continue()
-                print(
-                    f"[C2] Оценка времени завершена! Фактическое: {timing_results['actual_duration']}мс, Оцененное: {timing_results['estimated_duration']}мс"
-                )
                 return True
 
-        # Обработка задачи воспроизведения (C3) - ИСПРАВЛЕНИЕ ЗДЕСЬ
+        # Обработка задачи воспроизведения (C3)
         elif self.reproduction_task.is_active:
-            print(f"[C3] Обработка задачи воспроизведения, событие: {event}")
-
-            # ВАЖНОЕ ИСПРАВЛЕНИЕ:
-            # Если задача воспроизведения уже активна, пробел должен обрабатываться только в ней,
-            # а не в основном обработчике KeyHandler
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                print(f"[C3] Пробел обрабатывается в handle_special_screens")
                 if hasattr(self.reproduction_task, "state"):
                     current_state = self.reproduction_task.state
-                    print(f"[C3] Текущее состояние: {current_state}")
 
                     # В этих состояниях пробел НЕ должен пропускаться в KeyHandler
                     states_to_handle = [
@@ -1247,7 +1234,6 @@ class Experiment:
                         "response_waiting",
                     ]
                     if current_state in states_to_handle:
-                        print(f"[C3] Пробел обрабатывается только в reproduction_task")
                         if self.reproduction_task.handle_event(event):
                             reproduction_results = self.reproduction_task.get_results()
 
@@ -1267,13 +1253,6 @@ class Experiment:
                                 self.reproduction_task.is_active = False
 
                             self.complete_and_continue()
-                            print(
-                                f"[C3] Воспроизведение завершено! Целевое: {reproduction_results['target_duration']}мс, Воспроизведенное: {reproduction_results['reproduced_duration']}мс"
-                            )
-                            if reproduction_results.get("start_delay"):
-                                print(
-                                    f"[C3] Задержка C3: {reproduction_results['start_delay']}мс"
-                                )
                             return True
             return False
 
@@ -1299,7 +1278,6 @@ class Experiment:
                 self.data_collector.record_occlusion_start(self.moving_point)
                 self.state.occlusion_started = True
                 self.photo_sensor_state = "occlusion"  # Устанавливаем красный цвет
-                print("Точка вошла в зону окклюзии - фотосенсор красный")
 
             # Сброс цвета фотосенсора когда точка снова становится видимой
             elif (
@@ -1308,7 +1286,6 @@ class Experiment:
                 and self.photo_sensor_state == "occlusion"
             ):
                 self.photo_sensor_state = "active"  # Возвращаем черный цвет
-                print("Точка вышла из зоны окклюзии - фотосенсор черный")
 
             # Проверка завершения траектории
             if self.moving_point.should_switch_to_next():
@@ -1334,13 +1311,9 @@ class Experiment:
         # Сбрасываем состояние фотосенсора при завершении траектории
         if self.photo_sensor_state == "occlusion":
             self.photo_sensor_state = "active"
-            print("Траектория завершена - сброс фотосенсора в черный цвет")
 
         if self.current_task.timing_estimation:
             # Для задач с оценкой времени при автоматическом завершении
-            print(
-                f"[C2] Траектория завершена автоматически! Время: {actual_duration}мс"
-            )
             self.pending_timing_duration = actual_duration
 
             # Создаем крестик для показа
@@ -1359,10 +1332,6 @@ class Experiment:
             # Фотосенсор белый для крестика
             self.photo_sensor_state = "passive"
 
-            print(
-                "[C2] Траектория завершена автоматически. Показан крестик для задачи со звездочкой."
-            )
-            print("[C2] Фотосенсор: белый (крестик C2)")
         else:
             self.handle_regular_task(actual_duration, current_time)
 
@@ -1374,9 +1343,6 @@ class Experiment:
 
         # ДЛЯ ВСЕХ ТИПОВ ЗАДАЧ: сразу переходим к следующей попытке
         self.complete_and_continue()
-        print(
-            f"Траектория завершена автоматически! Время: {actual_duration}мс - сразу переходим к следующей"
-        )
 
     def update_moving_point_logic(self, dt):
         """Логика для движущейся точки"""
@@ -1395,7 +1361,6 @@ class Experiment:
                 self.data_collector.record_occlusion_start(self.moving_point)
             self.state.occlusion_started = True
             self.photo_sensor_state = "occlusion"
-            print("Точка вошла в окклюзию")
 
         # Сброс окклюзии
         elif (
@@ -1404,7 +1369,6 @@ class Experiment:
             and self.photo_sensor_state == "occlusion"
         ):
             self.photo_sensor_state = "active"
-            print("Точка вышла из окклюзии")
 
         # Если точка движется и не в окклюзии - фотосенсор черный
         elif self.moving_point.is_moving and self.photo_sensor_state != "occlusion":
@@ -1417,56 +1381,59 @@ class Experiment:
     def run(self):
         """Запуск основного цикла эксперимента"""
         print("=== Эксперимент запущен ===")
-
+        
         while self.state.running:
             dt = self.clock.tick(60)
             current_time = pygame.time.get_ticks()
-
+            
             # Обработка событий
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.state.running = False
                 elif event.type == pygame.KEYDOWN:
+                    # Обработка экрана сводки блока (если активен)
+                    if self.summary_screen and self.summary_screen.is_active:
+                        if self.handle_block_summary(event):
+                            continue
+                    # Обработка специальных экранов (C2, C3)
                     if self.handle_special_screens(event):
                         continue
                     else:
+                        # Обработка основных клавиш
                         self.key_handler.handle_event(event)
-
+            
             # Обновляем состояния
             if self.moving_point is not None and self.current_task.has_trajectory:
                 self.moving_point.update(dt)
-
+                
                 # Проверяем, завершилась ли задержка
                 if (
                     self.state.in_start_delay
                     and not self.moving_point.is_in_start_delay
                 ):
                     self.state.in_start_delay = False
-                    print("✓ Состояние: задержка завершена")
-
+                    
                     # Меняем фотосенсор на черный при начале движения
                     self.photo_sensor_state = "active"
-                    print("Фотосенсор: черный (начало движения)")
-
+                
                 # Проверяем, началось ли движение
                 if not self.state.movement_started and self.moving_point.is_moving:
                     self.state.movement_started = True
                     if hasattr(self, "data_collector") and self.data_collector:
                         self.data_collector.record_movement_start()
-                    print("✓ Состояние: движение началось")
-
+                
                 # Если точка движется, выполняем дополнительную логику
                 if self.moving_point.is_moving:
                     self.update_moving_point_logic(dt)
-
-                    # Обновление состояния для задачи воспроизведения (C3)
+            
+            # Обновление состояния для задачи воспроизведения (C3)
             if self.reproduction_task.is_active:
                 self.reproduction_task.update()
-
+                
                 # ИСПРАВЛЕНИЕ: ДЛЯ C3 - правильная логика индикатора
                 if hasattr(self.reproduction_task, "state"):
                     current_state = self.reproduction_task.state
-
+                    
                     # Состояния с КРЕСТИКОМ - БЕЛЫЙ индикатор:
                     # - first_cross_waiting (первый крестик с инструкцией)
                     # - in_start_delay (задержка - крестик без инструкции)
@@ -1477,25 +1444,25 @@ class Experiment:
                         "second_cross_waiting",
                     ]:
                         self.photo_sensor_state = "passive"  # Белый
-                        print(
-                            f"[C3] Фотосенсор: белый (крестик, состояние: {current_state})"
-                        )
-
+                    
                     # Состояния с КРУГОМ - ЧЕРНЫЙ индикатор:
                     # - first_circle_auto (круг на декодированное время)
                     # - response_waiting (круг для ответа с инструкцией)
                     elif current_state in ["first_circle_auto", "response_waiting"]:
                         self.photo_sensor_state = "active"  # Черный
-                        print(
-                            f"[C3] Фотосенсор: черный (круг, состояние: {current_state})"
-                        )
-
+            
             # Отрисовка
             self.screen.fill(self.BACKGROUND_COLOR)
-            self.screen_manager.draw_current_screen()
-
+            
+            # Если активен экран сводки блока, рисуем его
+            if self.summary_screen and self.summary_screen.is_active:
+                self.summary_screen.draw(self.screen)
+            else:
+                # Иначе рисуем текущий экран эксперимента
+                self.screen_manager.draw_current_screen()
+            
             pygame.display.flip()
-
+        
         self.cleanup()
 
     def cleanup(self):
