@@ -34,6 +34,9 @@ def save_experiment_data(
 ) -> str:
     """Сохраняет данные эксперимента в JSON файл"""
     try:
+        # Создаем папку data, если она не существует
+        os.makedirs("data", exist_ok=True)
+        
         # Создаем имя файла с временной меткой
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"data/{participant_id}_block_{block_number}_{timestamp}.json"
@@ -52,7 +55,9 @@ def save_experiment_data(
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(experiment_data, f, ensure_ascii=False, indent=2)
 
+        print(f"✅ Данные сохранены в файл: {filename}")
         return filename
+        
     except Exception as e:
         print(f"❌ Ошибка сохранения данных: {e}")
         # Пытаемся сохранить в альтернативное место
@@ -60,6 +65,46 @@ def save_experiment_data(
             alt_filename = f"experiment_data_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             with open(alt_filename, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"✅ Данные сохранены в резервный файл: {alt_filename}")
+            return alt_filename
+        except Exception as e2:
+            print(f"💥 Критическая ошибка сохранения: {e2}")
+            return ""
+
+
+def save_block_duration_response(participant_id: str, response_data: Dict[str, Any]) -> str:
+    """Сохраняет ответ о длительности блока в отдельный файл"""
+    try:
+        # Создаем папку data, если она не существует
+        os.makedirs("data", exist_ok=True)
+        
+        # Создаем имя файла с временной меткой
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"data/{participant_id}_block_duration_{timestamp}.json"
+
+        # Создаем структуру данных
+        experiment_data = {
+            "participant_id": participant_id,
+            "export_timestamp": timestamp,
+            "export_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "response": response_data,
+        }
+
+        # Сохраняем в файл
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(experiment_data, f, ensure_ascii=False, indent=2)
+
+        print(f"✅ Ответ о длительности блока сохранен в файл: {filename}")
+        return filename
+        
+    except Exception as e:
+        print(f"❌ Ошибка сохранения ответа о длительности блока: {e}")
+        # Пытаемся сохранить в альтернативное место
+        try:
+            alt_filename = f"block_duration_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            with open(alt_filename, "w", encoding="utf-8") as f:
+                json.dump(response_data, f, ensure_ascii=False, indent=2)
+            print(f"✅ Ответ сохранен в резервный файл: {alt_filename}")
             return alt_filename
         except Exception as e2:
             print(f"💥 Критическая ошибка сохранения: {e2}")
@@ -68,7 +113,12 @@ def save_experiment_data(
 
 def get_current_time() -> float:
     """Получение текущего времени в миллисекундах"""
-    return pygame.time.get_ticks() if "pygame" in globals() else 0
+    try:
+        import pygame
+        return pygame.time.get_ticks()
+    except ImportError:
+        print("Pygame не установлен, возвращаем 0")
+        return 0
 
 
 def format_time(milliseconds: float) -> str:
@@ -77,8 +127,7 @@ def format_time(milliseconds: float) -> str:
     return f"{seconds:.3f}"
 
 
-# Проверяем, доступен ли pygame для функций времени
-try:
-    import pygame
-except ImportError:
-    print("Pygame не установлен, некоторые функции utils.py могут не работать")
+def ensure_data_folder():
+    """Создает папку data, если она не существует"""
+    os.makedirs("data", exist_ok=True)
+    print(f"📁 Папка 'data' создана или уже существует")

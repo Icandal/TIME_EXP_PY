@@ -172,80 +172,124 @@ class DataCollector:
 
     def complete_trial(self, completed_normally: bool = False) -> None:
         """Завершает запись попытки"""
-        self.current_trial_data["completed_normally"] = (
-            completed_normally  # Булево значение
-        )
+        # Безопасная установка completed_normally
+        if self.current_trial_data:
+            self.current_trial_data["completed_normally"] = completed_normally
+            
+            # Убедимся, что время окончания движения записано (только если поле существует)
+            if (
+                completed_normally 
+                and "movement_end_time" in self.current_trial_data
+                and not self.current_trial_data["movement_end_time"]
+            ):
+                self.current_trial_data["movement_end_time"] = pygame.time.get_ticks()
 
-        # Убедимся, что время окончания движения записано
-        if completed_normally and not self.current_trial_data["movement_end_time"]:
-            self.current_trial_data["movement_end_time"] = (
-                pygame.time.get_ticks()
-            )  # Текущее время в мс
+            # Для задач воспроизведения (без движения) устанавливаем движение как завершенное
+            if (
+                self.current_trial_data.get("condition_type") == "reproduction"
+                and "movement_end_time" not in self.current_trial_data
+            ):
+                self.current_trial_data["movement_end_time"] = pygame.time.get_ticks()
+                # Устанавливаем время начала, если его нет
+                if "movement_start_time" not in self.current_trial_data:
+                    self.current_trial_data["movement_start_time"] = pygame.time.get_ticks() - 1
+                # Устанавливаем trial_number, если его нет
+                if "trial_number" not in self.current_trial_data:
+                    self.current_trial_data["trial_number"] = self.trial_number
+        else:
+            # Если current_trial_data пуст, создаем минимальную структуру
+            self.current_trial_data = {
+                "trial_number": self.trial_number,
+                "completed_normally": completed_normally,
+                "condition_type": "reproduction",
+                "movement_start_time": pygame.time.get_ticks() - 1,
+                "movement_end_time": pygame.time.get_ticks(),
+            }
 
-        # Добавляем попытку в общий список
-        self.all_trials_data.append(self.current_trial_data.copy())
+        # Добавляем попытку в общий список (если есть данные)
+        if self.current_trial_data:
+            self.all_trials_data.append(self.current_trial_data.copy())
 
-        # Выводим информацию о попытке в консоль
-        self._print_trial_summary()
+        # Выводим информацию о попытке в консоль (если есть данные)
+        if self.current_trial_data:
+            self._print_trial_summary()
 
     def _print_trial_summary(self) -> None:
         """Выводит сводку по завершенной попытке"""
         trial = self.current_trial_data
-        print(f"\n=== Попытка {trial['trial_number']} завершена ===")
-        print(f"Траектория: {trial['trajectory_type']}[{trial['trajectory_number']}]")
-        print(f"Условие: {trial['condition_type']}")
+        
+        if not trial:
+            print("\n=== Попытка завершена (нет данных) ===")
+            return
+        
+        # Безопасное получение значений с значениями по умолчанию
+        trial_number = trial.get("trial_number", "N/A")
+        trajectory_type = trial.get("trajectory_type", "none")
+        trajectory_number = trial.get("trajectory_number", 0)
+        condition_type = trial.get("condition_type", "unknown")
+        
+        print(f"\n=== Попытка {trial_number} завершена ===")
+        print(f"Траектория: {trajectory_type}[{trajectory_number}]")
+        print(f"Условие: {condition_type}")
 
         # ДОБАВЛЯЕМ: информацию о задержке
-        if trial.get("start_delay", 0) > 0:
-            print(f"Задержка перед стартом: {trial['start_delay']}мс")
+        start_delay = trial.get("start_delay", 0)
+        if start_delay > 0:
+            print(f"Задержка перед стартом: {start_delay}мс")
 
-        if trial["reaction_time"]:
-            print(f"Время реакции: {trial['reaction_time']}мс")
+        reaction_time = trial.get("reaction_time")
+        if reaction_time:
+            print(f"Время реакции: {reaction_time}мс")
 
-        if trial["stopped_by_user"]:
+        stopped_by_user = trial.get("stopped_by_user", False)
+        if stopped_by_user:
             print("Остановлено пользователем")
         else:
             print("Завершено автоматически")
 
-        if trial["actual_response_time_movement"]:
-            print(
-                f"Время от движения до ответа: {trial['actual_response_time_movement']}мс"
-            )
+        actual_response_time_movement = trial.get("actual_response_time_movement")
+        if actual_response_time_movement:
+            print(f"Время от движения до ответа: {actual_response_time_movement}мс")
 
-        if trial["actual_response_time_stimulus"]:
-            print(
-                f"Время от стимула до ответа: {trial['actual_response_time_stimulus']}мс"
-            )
+        actual_response_time_stimulus = trial.get("actual_response_time_stimulus")
+        if actual_response_time_stimulus:
+            print(f"Время от стимула до ответа: {trial['actual_response_time_stimulus']}мс")
 
-        if trial["actual_trajectory_duration"]:
-            print(
-                f"Фактическое время движения: {trial['actual_trajectory_duration']}мс"
-            )
+        actual_trajectory_duration = trial.get("actual_trajectory_duration")
+        if actual_trajectory_duration:
+            print(f"Фактическое время движения: {actual_trajectory_duration}мс")
 
-        if trial["reference_response_time"]:
-            print(f"Эталонное время: {trial['reference_response_time']}мс")
+        reference_response_time = trial.get("reference_response_time")
+        if reference_response_time:
+            print(f"Эталонное время: {reference_response_time}мс")
 
         # Добавляем информацию об оценке времени, если она есть
-        if trial.get("timing_estimation"):
-            timing = trial["timing_estimation"]
+        timing_estimation = trial.get("timing_estimation")
+        if timing_estimation:
             print(f"Оценка времени:")
-            print(f"  Фактическое время: {timing['actual_duration']}мс")
-            print(f"  Оцененное время: {timing['estimated_duration']}мс")
-            print(f"  Ошибка: {timing['estimation_error']}мс")
-            print(f"  Абсолютная ошибка: {timing['estimation_error_abs']}мс")
-            print(f"  Отношение: {timing['estimation_ratio']:.2f}")
+            print(f"  Фактическое время: {timing_estimation.get('actual_duration', 'N/A')}мс")
+            print(f"  Оцененное время: {timing_estimation.get('estimated_duration', 'N/A')}мс")
+            print(f"  Ошибка: {timing_estimation.get('estimation_error', 'N/A')}мс")
+            print(f"  Абсолютная ошибка: {timing_estimation.get('estimation_error_abs', 'N/A')}мс")
+            estimation_ratio = timing_estimation.get('estimation_ratio')
+            if estimation_ratio:
+                print(f"  Отношение: {estimation_ratio:.2f}")
+            else:
+                print(f"  Отношение: N/A")
 
         # Добавляем информацию о воспроизведении времени, если она есть
-        if trial.get("reproduction_results"):
-            reproduction = trial["reproduction_results"]
+        reproduction_results = trial.get("reproduction_results")
+        if reproduction_results:
             print(f"Воспроизведение времени:")
-            print(f"  Целевая длительность: {reproduction['target_duration']}мс")
-            print(
-                f"  Воспроизведенная длительность: {reproduction['reproduced_duration']}мс"
-            )
-            print(f"  Ошибка: {reproduction['reproduction_error']}мс")
-            print(f"  Абсолютная ошибка: {reproduction['reproduction_error_abs']}мс")
-            print(f"  Отношение: {reproduction['reproduction_ratio']:.2f}")
+            print(f"  Целевая длительность: {reproduction_results.get('target_duration', 'N/A')}мс")
+            print(f"  Воспроизведенная длительность: {reproduction_results.get('reproduced_duration', 'N/A')}мс")
+            print(f"  Ошибка: {reproduction_results.get('reproduction_error', 'N/A')}мс")
+            print(f"  Абсолютная ошибка: {reproduction_results.get('reproduction_error_abs', 'N/A')}мс")
+            reproduction_ratio = reproduction_results.get('reproduction_ratio')
+            if reproduction_ratio:
+                print(f"  Отношение: {reproduction_ratio:.2f}")
+            else:
+                print(f"  Отношение: N/A")
 
     def get_all_data(self) -> List[Dict[str, Any]]:
         """Возвращает все собранные данные"""
