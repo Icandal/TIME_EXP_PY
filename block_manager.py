@@ -116,6 +116,7 @@ class BlockManager:
         """Переходит к следующей попытке, возвращает True если блок завершен"""
         self.current_trial_index += 1
 
+        # Проверяем, не вышли ли за пределы текущего блока
         if self.current_trial_index >= len(
             self.block_sequences[self.current_block_index]
         ):
@@ -123,12 +124,13 @@ class BlockManager:
             self.current_trial_index = 0
             self.current_block_index += 1
 
-            # Проверяем, не вышли ли за пределы списка блоков
+            # Проверяем, не завершен ли весь эксперимент
             if self.current_block_index >= len(self.blocks):
                 return True  # Эксперимент завершен
-
-            return True  # Блок завершен, но эксперимент продолжается
-        return False
+            else:
+                # Только что завершили блок, переходим к следующему
+                return True  # Блок завершен
+        return False  # Просто перешли к следующей попытке в том же блоке
 
     def is_experiment_complete(self) -> bool:
         """Проверяет, завершен ли эксперимент"""

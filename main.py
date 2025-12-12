@@ -785,7 +785,7 @@ class Experiment:
         """Обработка завершения блока"""
         print(f"=== БЛОК {self.progress_info['block_number']} ЗАВЕРШЕН ===")
         print(f"Всего попыток в блоке: {len(self.data_collector.get_all_data())}")
-        
+
         # Показываем сводку блока ДЛЯ ВСЕХ БЛОКОВ, включая последний
         self.show_block_summary()
 
@@ -1007,18 +1007,16 @@ class Experiment:
         block_completed = self.block_manager.move_to_next_trial()
 
         if block_completed:
-            # Блок завершен - показываем сводку
-            if self.block_manager.is_experiment_complete():
-                print("=== ПОСЛЕДНИЙ БЛОК ЗАВЕРШЕН ===")
-            else:
-                print(f"=== БЛОК {self.progress_info['block_number']} ЗАВЕРШЕН ===")
+            # Блок завершен
+            print(f"=== БЛОК {self.progress_info['block_number']} ЗАВЕРШЕН ===")
+            print(f"Всего попыток в блоке: {len(self.data_collector.get_all_data())}")
             
-            # Всегда показываем сводку блока
-            self.handle_block_completion()
-            return  # Возвращаем, чтобы не продолжать сразу
-
-        # Только если блок не завершен, продолжаем к следующей попытке
-        self.setup_next_trial()
+            # НЕ сохраняем здесь данные - сохраним в handle_block_summary()
+            # Показываем сводку блока
+            self.show_block_summary()
+        else:
+            # Просто следующая попытка в том же блоке
+            self.setup_next_trial()
 
     def show_block_summary(self):
         """Показывает сводку по блоку с баллом точности и вопросом о длительности"""
@@ -1027,7 +1025,7 @@ class Experiment:
             self.screen_height,
             self.data_collector,
             self.current_block,
-            self.progress_info["block_number"]
+            self.progress_info["block_number"],
         )
         self.summary_screen.activate()
 
@@ -1037,50 +1035,49 @@ class Experiment:
             if self.summary_screen.handle_event(event):
                 # Получаем ответ пользователя о длительности блока
                 duration_response = self.summary_screen.get_duration_response()
-                
+
                 # Сохраняем ответ в данных
                 if duration_response:
-                    print(f"Ответ о длительности блока: {duration_response['perceived_duration']}")
                     self.save_block_duration_response(duration_response)
+
+                # ВАЖНО: Сохраняем данные ТОЛЬКО текущего блока
+                current_block_data = self.data_collector.get_all_data()
                 
-                # Сохраняем данные блока
-                self.save_current_data()
+                # Создаем имя файла для ТОЛЬКО этого блока
+                from utils import save_experiment_data
+                save_experiment_data(
+                    self.config.participant_id,
+                    self.progress_info["block_number"],  # Текущий номер блока
+                    current_block_data  # Только данные этого блока
+                )
                 
+                print(f"✅ Данные блока {self.progress_info['block_number']} сохранены")
+
                 # Скрываем сводку
                 self.summary_screen.deactivate()
-                
+
                 # Проверяем, это последний блок?
                 if self.block_manager.is_experiment_complete():
                     print("=== ПОСЛЕДНИЙ БЛОК ЗАВЕРШЕН ===")
                     print("Эксперимент полностью завершен!")
-                    return True  # Возвращаем True, чтобы завершить эксперимент
-                
-                # Переходим к следующему блоку
-                block_completed = self.block_manager.move_to_next_trial()
-                
-                if self.block_manager.is_experiment_complete():
-                    print("=== Эксперимент завершен! Все блоки пройдены. ===")
-                    return True  # Завершаем эксперимент
-                
-                # Обновляем прогресс
-                self.update_progress_info()
-                
-                # Создаем новый сборщик данных для нового блока
+                    return True
+
+                # ВАЖНО: Создаем НОВЫЙ DataCollector для нового блока
                 self.data_collector = DataCollector(
                     self.config.participant_id, 
-                    self.progress_info["block_number"]
+                    self.progress_info["block_number"] + 1  # Следующий номер блока
                 )
                 
-                # Настраиваем следующую попытку
+                # Настраиваем ПЕРВУЮ попытку нового блока
                 self.setup_next_trial()
                 return True
         return False
-    
+
     def save_block_duration_response(self, response_data: Dict[str, Any]):
         """Сохраняет ответ о длительности блока в отдельный файл"""
         # Используем функцию из utils.py
         from utils import save_block_duration_response as save_duration_response
-        
+
         filename = save_duration_response(self.config.participant_id, response_data)
         if filename:
             print(f"✅ Ответ о длительности блока сохранен: {filename}")
@@ -1106,20 +1103,32 @@ class Experiment:
         print("\n".join(help_info))
 
     def save_current_data(self):
-        """Сохранение текущих данных блока"""
+        """Сохранение текущих данных блока - ТОЛЬКО для текущего блока"""
         if self.data_collector and self.data_collector.get_all_data():
-            filename = save_experiment_data(
-                self.config.participant_id,
-                self.progress_info["block_number"],
-                self.data_collector.get_all_data(),
-            )
-            if filename:
-                print(f"✅ Данные блока {self.progress_info['block_number']} сохранены")
+            # Фильтруем данные только текущего блока
+            current_block_number = self.progress_info['block_number']
+            current_block_data = [
+                trial for trial in self.data_collector.get_all_data() 
+                if trial.get('block_number') == current_block_number
+            ]
+            
+            if current_block_data:
+                from utils import save_experiment_data
+                filename = save_experiment_data(
+                    self.config.participant_id,
+                    current_block_number,
+                    current_block_data
+                )
+                if filename:
+                    print(f"✅ Данные блока {current_block_number} сохранены в {filename}")
+                else:
+                    print(f"❌ Не удалось сохранить данные блока {current_block_number}")
+                return filename
             else:
-                print(f"❌ Не удалось сохранить данные блока {self.progress_info['block_number']}")
-            return filename
+                print(f"⚠️ Нет данных для сохранения в блоке {current_block_number}")
+                return ""
         else:
-            print(f"⚠️ Нет данных для сохранения в блоке {self.progress_info['block_number']}")
+            print(f"⚠️ Нет данных для сохранения")
             return ""
 
     def draw_indicator(self):
@@ -1131,7 +1140,7 @@ class Experiment:
             color = self.photo_sensor_color_occlusion  # Красный при окклюзии
         else:
             color = self.photo_sensor_color_active  # Черный в активном режиме
-        
+
         # Рисуем индикатор
         pygame.draw.circle(
             self.screen,
@@ -1185,7 +1194,7 @@ class Experiment:
         # Обработка экрана сводки блока
         if self.summary_screen and self.summary_screen.is_active:
             return self.handle_block_summary(event)
-        
+
         # Обработка крестика для задачи со звездочкой (C2)
         if self.showing_cross_for_star:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
@@ -1372,13 +1381,13 @@ class Experiment:
         """Корректное завершение эксперимента после последнего блока"""
         print("=== ЭКСПЕРИМЕНТ ПОЛНОСТЬЮ ЗАВЕРШЕН ===")
         print("Спасибо за участие!")
-        
+
         # Показываем финальное сообщение
         self.show_final_message()
-        
+
         # Сохраняем все данные
         self.save_current_data()
-        
+
         # Устанавливаем флаг завершения
         self.state.running = False
 
@@ -1387,26 +1396,32 @@ class Experiment:
         # Создаем простой экран с благодарностью
         font = pygame.font.Font(None, 48)
         small_font = pygame.font.Font(None, 32)
-        
+
         self.screen.fill(self.BACKGROUND_COLOR)
-        
+
         # Заголовок
         title = font.render("ЭКСПЕРИМЕНТ ЗАВЕРШЕН", True, (0, 0, 0))
-        title_rect = title.get_rect(center=(self.screen_width // 2, self.screen_height // 2 - 50))
+        title_rect = title.get_rect(
+            center=(self.screen_width // 2, self.screen_height // 2 - 50)
+        )
         self.screen.blit(title, title_rect)
-        
+
         # Сообщение
         message = small_font.render("Спасибо за участие!", True, (0, 0, 0))
-        message_rect = message.get_rect(center=(self.screen_width // 2, self.screen_height // 2))
+        message_rect = message.get_rect(
+            center=(self.screen_width // 2, self.screen_height // 2)
+        )
         self.screen.blit(message, message_rect)
-        
+
         # Инструкция
         instruction = small_font.render("Нажмите ESC для выхода", True, (100, 100, 100))
-        instruction_rect = instruction.get_rect(center=(self.screen_width // 2, self.screen_height // 2 + 50))
+        instruction_rect = instruction.get_rect(
+            center=(self.screen_width // 2, self.screen_height // 2 + 50)
+        )
         self.screen.blit(instruction, instruction_rect)
-        
+
         pygame.display.flip()
-        
+
         # Ждем нажатия ESC
         waiting = True
         while waiting:
@@ -1421,11 +1436,11 @@ class Experiment:
     def run(self):
         """Запуск основного цикла эксперимента"""
         print("=== Эксперимент запущен ===")
-        
+
         while self.state.running:
             dt = self.clock.tick(60)
             current_time = pygame.time.get_ticks()
-            
+
             # Обработка событий
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -1444,39 +1459,39 @@ class Experiment:
                     else:
                         # Обработка основных клавиш
                         self.key_handler.handle_event(event)
-            
+
             # Обновляем состояния
             if self.moving_point is not None and self.current_task.has_trajectory:
                 self.moving_point.update(dt)
-                
+
                 # Проверяем, завершилась ли задержка
                 if (
                     self.state.in_start_delay
                     and not self.moving_point.is_in_start_delay
                 ):
                     self.state.in_start_delay = False
-                    
+
                     # Меняем фотосенсор на черный при начале движения
                     self.photo_sensor_state = "active"
-                
+
                 # Проверяем, началось ли движение
                 if not self.state.movement_started and self.moving_point.is_moving:
                     self.state.movement_started = True
                     if hasattr(self, "data_collector") and self.data_collector:
                         self.data_collector.record_movement_start()
-                
+
                 # Если точка движется, выполняем дополнительную логику
                 if self.moving_point.is_moving:
                     self.update_moving_point_logic(dt)
-            
+
             # Обновление состояния для задачи воспроизведения (C3)
             if self.reproduction_task.is_active:
                 self.reproduction_task.update()
-                
+
                 # ИСПРАВЛЕНИЕ: ДЛЯ C3 - правильная логика индикатора
                 if hasattr(self.reproduction_task, "state"):
                     current_state = self.reproduction_task.state
-                    
+
                     # Состояния с КРЕСТИКОМ - БЕЛЫЙ индикатор:
                     # - first_cross_waiting (первый крестик с инструкцией)
                     # - in_start_delay (задержка - крестик без инструкции)
@@ -1487,25 +1502,25 @@ class Experiment:
                         "second_cross_waiting",
                     ]:
                         self.photo_sensor_state = "passive"  # Белый
-                    
+
                     # Состояния с КРУГОМ - ЧЕРНЫЙ индикатор:
                     # - first_circle_auto (круг на декодированное время)
                     # - response_waiting (круг для ответа с инструкцией)
                     elif current_state in ["first_circle_auto", "response_waiting"]:
                         self.photo_sensor_state = "active"  # Черный
-            
+
             # Отрисовка
             self.screen.fill(self.BACKGROUND_COLOR)
-            
+
             # Если активен экран сводки блока, рисуем его
             if self.summary_screen and self.summary_screen.is_active:
                 self.summary_screen.draw(self.screen)
             else:
                 # Иначе рисуем текущий экран эксперимента
                 self.screen_manager.draw_current_screen()
-            
+
             pygame.display.flip()
-        
+
         self.cleanup()
 
     def cleanup(self):
